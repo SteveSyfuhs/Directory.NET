@@ -38,7 +38,7 @@ watch(() => props.modelValue, async (dn) => {
   }
   try {
     const result = await resolveObject(dn)
-    resolvedName.value = result.displayName || result.name || cnFromDn(dn)
+    resolvedName.value = result.displayName || cnFromDn(dn)
   } catch {
     resolvedName.value = cnFromDn(dn)
   }

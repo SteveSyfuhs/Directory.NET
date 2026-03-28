@@ -273,7 +273,7 @@ async function onValidateBlob() {
 }
 
 async function onRevokeOffline() {
-  if (!confirm(`Revoke offline join provision for "${revokeComputerName.value}"? This will invalidate the blob.`)) return
+  if (!window.confirm(`Revoke offline join provision for "${revokeComputerName.value}"? This will invalidate the blob.`)) return
   revoking.value = true
   try {
     await revokeOfflineJoin(revokeComputerName.value.trim())
@@ -361,7 +361,7 @@ async function copyToClipboard(text: string) {
 
       <TabView style="margin-top: 1rem">
         <!-- Join Tab -->
-        <TabPanel header="Join Computer">
+        <TabPanel header="Join Computer" value="join-computer">
           <div class="card">
             <h2 style="margin: 0 0 1rem; font-size: 1rem; font-weight: 600">
               <i class="pi pi-plus-circle" style="margin-right: 0.5rem"></i>Join a Computer to the Domain
@@ -444,7 +444,7 @@ async function copyToClipboard(text: string) {
         </TabPanel>
 
         <!-- Rejoin Tab -->
-        <TabPanel header="Rejoin Computer">
+        <TabPanel header="Rejoin Computer" value="rejoin-computer">
           <div class="card">
             <h2 style="margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600">
               <i class="pi pi-refresh" style="margin-right: 0.5rem"></i>Rejoin a Computer
@@ -480,7 +480,7 @@ async function copyToClipboard(text: string) {
         </TabPanel>
 
         <!-- Unjoin Tab -->
-        <TabPanel header="Unjoin Computer">
+        <TabPanel header="Unjoin Computer" value="unjoin-computer">
           <div class="card">
             <h2 style="margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600">
               <i class="pi pi-sign-out" style="margin-right: 0.5rem"></i>Unjoin a Computer
@@ -517,7 +517,7 @@ async function copyToClipboard(text: string) {
         </TabPanel>
 
         <!-- Offline Domain Join Tab -->
-        <TabPanel header="Offline Join (djoin)">
+        <TabPanel header="Offline Join (djoin)" value="offline-join-(djoin)">
           <div class="card" style="margin-bottom: 1.5rem">
             <h2 style="margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600">
               <i class="pi pi-cloud-download" style="margin-right: 0.5rem"></i>Provision Offline Join
@@ -637,7 +637,7 @@ async function copyToClipboard(text: string) {
         </TabPanel>
 
         <!-- History Tab -->
-        <TabPanel header="Recent Operations">
+        <TabPanel header="Recent Operations" value="recent-operations">
           <div class="card">
             <h2 style="margin: 0 0 1rem; font-size: 1rem; font-weight: 600">
               <i class="pi pi-history" style="margin-right: 0.5rem"></i>Recent Domain Join Operations

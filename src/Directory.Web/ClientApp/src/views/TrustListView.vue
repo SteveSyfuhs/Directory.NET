@@ -289,7 +289,7 @@ function directionIcon(direction: number): string {
           <label style="display: block; font-weight: 600; margin-bottom: 0.25rem; font-size: 0.875rem">Shared Secret (for inter-realm key)</label>
           <Password v-model="newTrust.sharedSecret" :feedback="false" toggleMask
                     placeholder="Shared secret for key derivation"
-                    style="width: 100%" :disabled="creating" inputStyle="width: 100%" />
+                    style="width: 100%" :disabled="creating" :inputStyle="{ width: '100%' }" />
         </div>
       </div>
       <template #footer>

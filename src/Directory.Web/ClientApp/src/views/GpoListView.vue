@@ -397,7 +397,7 @@ function ensureSecurityOptions() {
       <template v-else-if="detail">
         <TabView>
           <!-- General Tab -->
-          <TabPanel header="General">
+          <TabPanel header="General" value="general">
             <div style="display: flex; flex-direction: column; gap: 1rem">
               <div>
                 <label style="display: block; margin-bottom: 0.25rem; font-weight: 600">Display Name</label>
@@ -431,7 +431,7 @@ function ensureSecurityOptions() {
           </TabPanel>
 
           <!-- Links Tab -->
-          <TabPanel header="Links">
+          <TabPanel header="Links" value="links">
             <div style="margin-bottom: 1rem">
               <Button label="Link to OU/Domain" icon="pi pi-link" size="small" @click="openLinkDialog" />
             </div>
@@ -467,7 +467,7 @@ function ensureSecurityOptions() {
           </TabPanel>
 
           <!-- Security Filtering Tab -->
-          <TabPanel header="Security Filtering">
+          <TabPanel header="Security Filtering" value="security-filtering">
             <div v-if="detail.securityFiltering.length === 0"
                  style="text-align: center; padding: 2rem; color: var(--p-text-muted-color)">
               <i class="pi pi-info-circle" style="font-size: 1.5rem; display: block; margin-bottom: 0.5rem"></i>
@@ -479,7 +479,7 @@ function ensureSecurityOptions() {
           </TabPanel>
 
           <!-- Password Policy Tab -->
-          <TabPanel header="Password Policy">
+          <TabPanel header="Password Policy" value="password-policy">
             <div style="display: flex; flex-direction: column; gap: 1rem" @focus.capture="ensurePasswordPolicy">
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem">
                 <div>
@@ -519,7 +519,7 @@ function ensureSecurityOptions() {
           </TabPanel>
 
           <!-- Account Lockout Tab -->
-          <TabPanel header="Account Lockout">
+          <TabPanel header="Account Lockout" value="account-lockout">
             <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem" @focus.capture="ensureAccountLockout">
               <div>
                 <label style="display: block; margin-bottom: 0.25rem; font-weight: 600">Lockout Threshold</label>
@@ -542,7 +542,7 @@ function ensureSecurityOptions() {
           </TabPanel>
 
           <!-- Audit Policy Tab -->
-          <TabPanel header="Audit Policy">
+          <TabPanel header="Audit Policy" value="audit-policy">
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem" @focus.capture="ensureAuditPolicy">
               <div v-for="field in [
                 { key: 'auditLogonEvents', label: 'Audit Logon Events' },
@@ -566,7 +566,7 @@ function ensureSecurityOptions() {
           </TabPanel>
 
           <!-- Security Options Tab -->
-          <TabPanel header="Security Options">
+          <TabPanel header="Security Options" value="security-options">
             <div style="display: flex; flex-direction: column; gap: 1rem" @focus.capture="ensureSecurityOptions">
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem">
                 <div>
@@ -619,7 +619,7 @@ function ensureSecurityOptions() {
           </TabPanel>
 
           <!-- Drive Mappings Tab -->
-          <TabPanel header="Drive Mappings & Scripts">
+          <TabPanel header="Drive Mappings & Scripts" value="drive-mappings-scripts">
             <div style="margin-bottom: 1rem">
               <h4 style="margin: 0 0 0.5rem 0">Drive Mappings</h4>
               <Button label="Add Drive Mapping" icon="pi pi-plus" size="small"
@@ -743,7 +743,7 @@ function ensureSecurityOptions() {
 
         <template v-if="rsopResult">
           <TabView>
-            <TabPanel header="Applied GPOs">
+            <TabPanel header="Applied GPOs" value="applied-gpos">
               <h4 v-if="rsopResult.userGpos.length > 0" style="margin: 0 0 0.5rem 0">User GPOs</h4>
               <DataTable v-if="rsopResult.userGpos.length > 0" :value="rsopResult.userGpos" stripedRows size="small">
                 <Column field="displayName" header="GPO" style="min-width: 200px" />
@@ -775,7 +775,7 @@ function ensureSecurityOptions() {
               </div>
             </TabPanel>
 
-            <TabPanel header="Merged Policy">
+            <TabPanel header="Merged Policy" value="merged-policy">
               <pre style="background: var(--p-surface-100); border-radius: 6px; padding: 1rem; overflow: auto; max-height: 400px; font-size: 0.85em">{{ JSON.stringify(rsopResult.mergedPolicy, null, 2) }}</pre>
             </TabPanel>
           </TabView>

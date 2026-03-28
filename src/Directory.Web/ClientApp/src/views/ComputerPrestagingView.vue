@@ -187,7 +187,7 @@ async function onDelete(computer: PrestagedComputerSummary) {
     <div v-else>
       <TabView>
         <!-- Single Pre-stage Tab -->
-        <TabPanel header="Pre-stage Computer">
+        <TabPanel header="Pre-stage Computer" value="pre-stage-computer">
           <div class="card">
             <h2 style="margin: 0 0 1rem; font-size: 1rem; font-weight: 600">
               <i class="pi pi-plus-circle" style="margin-right: 0.5rem"></i>Pre-stage a Computer Account
@@ -265,7 +265,7 @@ async function onDelete(computer: PrestagedComputerSummary) {
         </TabPanel>
 
         <!-- Bulk Pre-stage Tab -->
-        <TabPanel header="Bulk Pre-stage">
+        <TabPanel header="Bulk Pre-stage" value="bulk-pre-stage">
           <div class="card">
             <h2 style="margin: 0 0 0.5rem; font-size: 1rem; font-weight: 600">
               <i class="pi pi-list" style="margin-right: 0.5rem"></i>Bulk Pre-stage
@@ -329,7 +329,7 @@ async function onDelete(computer: PrestagedComputerSummary) {
         </TabPanel>
 
         <!-- Pre-staged Computers Tab -->
-        <TabPanel header="Pre-staged Computers">
+        <TabPanel header="Pre-staged Computers" value="pre-staged-computers">
           <div class="toolbar">
             <Button icon="pi pi-refresh" size="small" severity="secondary" text
                     @click="loadComputers" v-tooltip="'Refresh'" />

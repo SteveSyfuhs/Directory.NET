@@ -1,4 +1,4 @@
-import { get, post, put, del } from './client'
+import { get, getText, post, put, del } from './client'
 
 export interface EnrollmentPermission {
   principalDn: string
@@ -135,7 +135,7 @@ export const initializeCa = (payload: CaInitializePayload) =>
   post<CaInfo>('/certificates/ca/initialize', payload)
 
 export const downloadCaCertificate = () =>
-  get<string>('/certificates/ca/certificate', { responseType: 'text' } as any)
+  getText('/certificates/ca/certificate')
 
 export const getCrlUrl = () => '/api/v1/certificates/ca/crl'
 
@@ -146,7 +146,7 @@ export const getEnrolledCertificate = (serialNumber: string) =>
   get<IssuedCertificateDetail>(`/certificates/enrolled/${encodeURIComponent(serialNumber)}`)
 
 export const downloadCertificatePem = (serialNumber: string) =>
-  get<string>(`/certificates/enrolled/${encodeURIComponent(serialNumber)}/download`, { responseType: 'text' } as any)
+  getText(`/certificates/enrolled/${encodeURIComponent(serialNumber)}/download`)
 
 export const enrollCertificate = (
   templateName: string,

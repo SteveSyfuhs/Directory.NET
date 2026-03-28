@@ -409,7 +409,7 @@ function getStepStatusSeverity(status: string): "success" | "danger" | "warn" | 
                 <label style="width: 140px; font-size: 0.875rem">{{ param.label }}</label>
                 <InputText
                   :modelValue="step.parameters[param.key] || ''"
-                  @update:modelValue="step.parameters[param.key] = $event"
+                  @update:modelValue="step.parameters[param.key] = $event ?? ''"
                   :placeholder="param.placeholder"
                   style="flex: 1"
                 />

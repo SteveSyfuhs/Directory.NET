@@ -420,7 +420,7 @@ function templatePurpose(tpl: CertificateTemplate): string {
 
     <TabView>
       <!-- CA Info Tab -->
-      <TabPanel header="Certificate Authority">
+      <TabPanel header="Certificate Authority" value="certificate-authority">
         <div v-if="caLoading" style="text-align: center; padding: 2rem"><ProgressSpinner /></div>
         <template v-else-if="caInfo && caInfo.isInitialized">
           <div class="card" style="margin-bottom: 1rem">
@@ -462,7 +462,7 @@ function templatePurpose(tpl: CertificateTemplate): string {
       </TabPanel>
 
       <!-- Templates Tab -->
-      <TabPanel header="Certificate Templates">
+      <TabPanel header="Certificate Templates" value="certificate-templates">
         <p style="font-size: 0.8125rem; color: var(--p-text-muted-color); margin: 0 0 0.75rem 0">Certificate templates define the settings and constraints for issued certificates, including validity period, key size, and intended usage.</p>
         <div class="toolbar">
           <Button label="Create Template" icon="pi pi-plus" size="small" @click="createTemplVisible = true" />
@@ -511,7 +511,7 @@ function templatePurpose(tpl: CertificateTemplate): string {
       </TabPanel>
 
       <!-- Enrolled Certificates Tab -->
-      <TabPanel header="Enrolled Certificates">
+      <TabPanel header="Enrolled Certificates" value="enrolled-certificates">
         <p style="font-size: 0.8125rem; color: var(--p-text-muted-color); margin: 0 0 0.75rem 0">Certificates that have been issued by the Certificate Authority. You can renew or revoke active certificates from here.</p>
         <div class="toolbar">
           <Button label="Request Certificate" icon="pi pi-plus" size="small" @click="enrollVisible = true"
@@ -657,7 +657,7 @@ function templatePurpose(tpl: CertificateTemplate): string {
             modal :style="{ width: '700px', maxHeight: '85vh' }">
       <template v-if="editTpl">
         <TabView>
-          <TabPanel header="General">
+          <TabPanel header="General" value="general">
             <div style="display: flex; flex-direction: column; gap: 1rem">
               <div>
                 <label style="display: block; margin-bottom: 0.25rem; font-weight: 600">Display Name</label>
@@ -676,7 +676,7 @@ function templatePurpose(tpl: CertificateTemplate): string {
             </div>
           </TabPanel>
 
-          <TabPanel header="Request Handling">
+          <TabPanel header="Request Handling" value="request-handling">
             <div style="display: flex; flex-direction: column; gap: 1rem">
               <div>
                 <label style="display: block; margin-bottom: 0.25rem; font-weight: 600">Key Usage</label>
@@ -703,7 +703,7 @@ function templatePurpose(tpl: CertificateTemplate): string {
             </div>
           </TabPanel>
 
-          <TabPanel header="Extensions">
+          <TabPanel header="Extensions" value="extensions">
             <div style="display: flex; flex-direction: column; gap: 1rem">
               <div>
                 <label style="display: block; margin-bottom: 0.25rem; font-weight: 600">Key Usage</label>
@@ -726,7 +726,7 @@ function templatePurpose(tpl: CertificateTemplate): string {
             </div>
           </TabPanel>
 
-          <TabPanel header="Security">
+          <TabPanel header="Security" value="security">
             <p style="color: var(--p-text-muted-color); font-size: 0.875rem; margin-top: 0">
               Define which principals can enroll, auto-enroll, or manage this template.
             </p>

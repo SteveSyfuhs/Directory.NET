@@ -477,7 +477,7 @@ async function onLinkWmi(filterId: string | null) {
     <template v-else-if="gpo">
       <TabView>
         <!-- Policy Settings Tab -->
-        <TabPanel header="Policy Settings">
+        <TabPanel header="Policy Settings" value="policy-settings">
           <div style="display: flex; gap: 1rem; height: calc(100vh - 280px)">
             <!-- Tree panel -->
             <div class="card" style="width: 340px; min-width: 340px; overflow-y: auto; padding: 0.75rem">
@@ -526,7 +526,7 @@ async function onLinkWmi(filterId: string | null) {
         </TabPanel>
 
         <!-- Security Filtering Tab -->
-        <TabPanel header="Security Filtering">
+        <TabPanel header="Security Filtering" value="security-filtering">
           <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: flex-end">
             <DnPicker v-model="addFilterDn" label="Add Security Principal"
                       objectFilter="(|(objectClass=user)(objectClass=group)(objectClass=computer))"
@@ -565,7 +565,7 @@ async function onLinkWmi(filterId: string | null) {
         </TabPanel>
 
         <!-- WMI Filtering Tab -->
-        <TabPanel header="WMI Filtering">
+        <TabPanel header="WMI Filtering" value="wmi-filtering">
           <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center">
             <Select :options="[{ id: null, name: '(None)' }, ...wmiFilters]" optionLabel="name" optionValue="id"
                     placeholder="Select WMI filter for this GPO" size="small" style="width: 350px"
@@ -599,7 +599,7 @@ async function onLinkWmi(filterId: string | null) {
         </TabPanel>
 
         <!-- Backup Tab -->
-        <TabPanel header="Backup / Restore">
+        <TabPanel header="Backup / Restore" value="backup-restore">
           <div style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: flex-end">
             <div style="flex: 1">
               <label style="display: block; margin-bottom: 0.25rem; font-weight: 600; font-size: 0.875rem">Backup Description</label>

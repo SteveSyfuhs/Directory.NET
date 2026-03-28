@@ -178,7 +178,7 @@ async function onSave() {
 
     <TabView v-else>
       <!-- General Tab -->
-      <TabPanel header="General">
+      <TabPanel header="General" value="general">
         <div class="props-form">
           <div class="form-field">
             <label>Zone Name</label>
@@ -206,7 +206,7 @@ async function onSave() {
       </TabPanel>
 
       <!-- SOA Tab -->
-      <TabPanel header="SOA">
+      <TabPanel header="SOA" value="soa">
         <div class="props-form">
           <div class="form-field">
             <label>Primary Server</label>
@@ -244,7 +244,7 @@ async function onSave() {
       </TabPanel>
 
       <!-- Name Servers Tab -->
-      <TabPanel header="Name Servers">
+      <TabPanel header="Name Servers" value="name-servers">
         <div class="props-form">
           <DataTable :value="nameServers.map((ns, i) => ({ idx: i, server: ns }))" size="small" stripedRows>
             <Column field="server" header="Name Server" />
@@ -265,7 +265,7 @@ async function onSave() {
       </TabPanel>
 
       <!-- Zone Transfers Tab -->
-      <TabPanel header="Zone Transfers">
+      <TabPanel header="Zone Transfers" value="zone-transfers">
         <div class="props-form">
           <div class="form-field">
             <label>Allow Zone Transfers</label>
@@ -300,7 +300,7 @@ async function onSave() {
       </TabPanel>
 
       <!-- Aging / Scavenging Tab -->
-      <TabPanel header="Scavenging">
+      <TabPanel header="Scavenging" value="scavenging">
         <div class="props-form">
           <div class="form-field">
             <div style="display: flex; align-items: center; gap: 0.5rem">

@@ -366,7 +366,7 @@ function featureLevelLabel(level: number) {
 
     <TabView v-else>
       <!-- ── Tab 1: DC Status & Demotion ──────────────────────────────────── -->
-      <TabPanel header="DC Status & Demotion">
+      <TabPanel header="DC Status & Demotion" value="dc-status-&-demotion">
         <div class="tab-content">
           <!-- Demotion in progress -->
           <div v-if="demoting || demotionStatus?.isInProgress" class="demotion-progress">
@@ -447,7 +447,7 @@ function featureLevelLabel(level: number) {
       </TabPanel>
 
       <!-- ── Tab 2: FSMO Roles ────────────────────────────────────────────── -->
-      <TabPanel header="FSMO Roles">
+      <TabPanel header="FSMO Roles" value="fsmo-roles">
         <div class="tab-content">
           <div v-if="fsmoLoading" class="loading-container">
             <ProgressSpinner strokeWidth="3" />
@@ -536,7 +536,7 @@ function featureLevelLabel(level: number) {
       </TabPanel>
 
       <!-- ── Tab 3: Functional Levels ─────────────────────────────────────── -->
-      <TabPanel header="Functional Levels">
+      <TabPanel header="Functional Levels" value="functional-levels">
         <div class="tab-content">
           <div v-if="flLoading" class="loading-container">
             <ProgressSpinner strokeWidth="3" />

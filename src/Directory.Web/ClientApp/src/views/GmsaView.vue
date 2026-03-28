@@ -216,7 +216,7 @@ function onRowDoubleClick(event: { data: GmsaAccount }) {
 
     <TabView>
       <!-- ── gMSA Accounts Tab ──────────────────────────────────── -->
-      <TabPanel header="gMSA Accounts">
+      <TabPanel header="gMSA Accounts" value="gmsa-accounts">
         <div class="toolbar">
           <Button label="Create gMSA" icon="pi pi-plus" size="small" @click="createVisible = true" />
           <Button label="Properties" icon="pi pi-pencil" size="small" severity="secondary" outlined
@@ -280,7 +280,7 @@ function onRowDoubleClick(event: { data: GmsaAccount }) {
       </TabPanel>
 
       <!-- ── KDS Root Keys Tab ──────────────────────────────────── -->
-      <TabPanel header="KDS Root Keys">
+      <TabPanel header="KDS Root Keys" value="kds-root-keys">
         <div class="toolbar">
           <Button label="Create KDS Root Key" icon="pi pi-plus" size="small" @click="onCreateKdsKey"
                   :loading="creatingKds" />

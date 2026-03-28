@@ -154,7 +154,7 @@ const failureReasonsList = computed(() => {
 
   <TabView>
     <!-- ── Verify Tab ──────────────────────────────────────────────── -->
-    <TabPanel header="Verify">
+    <TabPanel header="Verify" value="verify">
       <div class="card" style="margin-bottom: 1.5rem">
         <div class="card-title">Run Verification Checks</div>
         <div class="toolbar">
@@ -242,7 +242,7 @@ const failureReasonsList = computed(() => {
     </TabPanel>
 
     <!-- ── Diagnostics Tab ─────────────────────────────────────────── -->
-    <TabPanel header="Diagnostics">
+    <TabPanel header="Diagnostics" value="diagnostics">
       <div class="card" style="margin-bottom: 1.5rem">
         <div class="card-title">Run Diagnostic Tests</div>
         <div class="toolbar">
@@ -319,7 +319,7 @@ const failureReasonsList = computed(() => {
     </TabPanel>
 
     <!-- ── Health Dashboard Tab ─────────────────────────────────────── -->
-    <TabPanel header="Health Dashboard">
+    <TabPanel header="Health Dashboard" value="health-dashboard">
       <div v-if="healthLoading" style="text-align: center; padding: 2rem">
         <ProgressSpinner strokeWidth="3" />
       </div>

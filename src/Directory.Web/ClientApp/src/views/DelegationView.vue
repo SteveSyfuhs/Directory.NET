@@ -284,7 +284,7 @@ function getPermissionDisplay(key: string): string {
   <PageHeader title="Delegated Administration" subtitle="Manage administrative roles and permissions for delegated access control" />
 
   <TabView>
-    <TabPanel header="Roles">
+    <TabPanel header="Roles" value="roles">
       <div class="toolbar">
         <InputText v-model="filterText" placeholder="Filter roles..." style="width: 280px" />
         <span class="toolbar-spacer"></span>
@@ -345,7 +345,7 @@ function getPermissionDisplay(key: string): string {
       </DataTable>
     </TabPanel>
 
-    <TabPanel header="User Lookup">
+    <TabPanel header="User Lookup" value="user-lookup">
       <div class="card" style="max-width: 800px">
         <h3 style="margin-top: 0; margin-bottom: 1rem; color: var(--p-text-color)">Effective Permissions Lookup</h3>
         <p style="color: var(--p-text-muted-color); margin-bottom: 1rem">

@@ -339,7 +339,7 @@ function onRowDoubleClick(event: { data: ServiceAccountSummary }) {
       <div v-if="detailLoading" style="text-align: center; padding: 2rem"><ProgressSpinner /></div>
       <template v-else-if="detail">
         <TabView>
-          <TabPanel header="General">
+          <TabPanel header="General" value="general">
             <div style="display: flex; flex-direction: column; gap: 1rem">
               <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem">
                 <div>
@@ -378,7 +378,7 @@ function onRowDoubleClick(event: { data: ServiceAccountSummary }) {
             </div>
           </TabPanel>
 
-          <TabPanel header="Allowed Principals">
+          <TabPanel header="Allowed Principals" value="allowed-principals">
             <p style="color: var(--p-text-muted-color); font-size: 0.875rem; margin-top: 0">
               Principals (computers/groups) allowed to retrieve the managed password for this service account.
             </p>
@@ -405,7 +405,7 @@ function onRowDoubleClick(event: { data: ServiceAccountSummary }) {
             </DataTable>
           </TabPanel>
 
-          <TabPanel header="SPNs">
+          <TabPanel header="SPNs" value="spns">
             <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem">
               <InputText v-model="editSpnInput" placeholder="HTTP/webapp.corp.example.com" size="small" style="flex: 1"
                          @keyup.enter="addEditSpn" />

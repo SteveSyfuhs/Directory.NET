@@ -169,7 +169,7 @@ function isSensitiveField(name: string): boolean {
 
       <div v-if="selectedHostname" class="card">
         <TabView>
-          <TabPanel v-for="section in nodeSections" :key="section" :header="section">
+          <TabPanel v-for="section in nodeSections" :key="section" :header="section" :value="section">
             <div v-if="sectionLoading[section]" style="text-align: center; padding: 2rem">
               <ProgressSpinner />
             </div>

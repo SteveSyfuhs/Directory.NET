@@ -100,7 +100,7 @@ function isSensitiveField(name: string): boolean {
 
     <div v-else class="card">
       <TabView>
-        <TabPanel v-for="section in clusterSections" :key="section" :header="section">
+        <TabPanel v-for="section in clusterSections" :key="section" :value="section" :header="section">
           <div v-if="sectionLoading[section]" style="text-align: center; padding: 2rem">
             <ProgressSpinner />
           </div>

@@ -202,11 +202,10 @@ async function doEvaluate() {
   }
 }
 
-function addToList(list: string[], valueRef: { value: string }) {
-  const val = valueRef.value.trim()
+function addToList(list: string[], value: string) {
+  const val = value.trim()
   if (val && !list.includes(val)) {
     list.push(val)
-    valueRef.value = ''
   }
 }
 
@@ -432,8 +431,8 @@ function formatDate(d: string | null) {
             <div>
               <label style="font-size: 0.8125rem; font-weight: 600;">Include Users</label>
               <div style="display: flex; gap: 0.25rem; margin-top: 0.25rem;">
-                <InputText v-model="tempIncludeUser" placeholder="DN or 'All'" style="flex: 1;" @keyup.enter="addToList(editForm.conditions.includeUsers, tempIncludeUser)" />
-                <Button icon="pi pi-plus" size="small" @click="addToList(editForm.conditions.includeUsers, tempIncludeUser)" />
+                <InputText v-model="tempIncludeUser" placeholder="DN or 'All'" style="flex: 1;" @keyup.enter="addToList(editForm.conditions.includeUsers, tempIncludeUser); tempIncludeUser = ''" />
+                <Button icon="pi pi-plus" size="small" @click="addToList(editForm.conditions.includeUsers, tempIncludeUser); tempIncludeUser = ''" />
               </div>
               <div style="margin-top: 0.25rem; display: flex; flex-wrap: wrap; gap: 0.25rem;">
                 <Chip v-for="(u, i) in editForm.conditions.includeUsers" :key="i" :label="u" removable @remove="removeFromList(editForm.conditions.includeUsers, i)" />
@@ -443,8 +442,8 @@ function formatDate(d: string | null) {
             <div>
               <label style="font-size: 0.8125rem; font-weight: 600;">Exclude Users</label>
               <div style="display: flex; gap: 0.25rem; margin-top: 0.25rem;">
-                <InputText v-model="tempExcludeUser" placeholder="DN" style="flex: 1;" @keyup.enter="addToList(editForm.conditions.excludeUsers, tempExcludeUser)" />
-                <Button icon="pi pi-plus" size="small" @click="addToList(editForm.conditions.excludeUsers, tempExcludeUser)" />
+                <InputText v-model="tempExcludeUser" placeholder="DN" style="flex: 1;" @keyup.enter="addToList(editForm.conditions.excludeUsers, tempExcludeUser); tempExcludeUser = ''" />
+                <Button icon="pi pi-plus" size="small" @click="addToList(editForm.conditions.excludeUsers, tempExcludeUser); tempExcludeUser = ''" />
               </div>
               <div style="margin-top: 0.25rem; display: flex; flex-wrap: wrap; gap: 0.25rem;">
                 <Chip v-for="(u, i) in editForm.conditions.excludeUsers" :key="i" :label="u" removable @remove="removeFromList(editForm.conditions.excludeUsers, i)" />
@@ -454,8 +453,8 @@ function formatDate(d: string | null) {
             <div>
               <label style="font-size: 0.8125rem; font-weight: 600;">Include Groups</label>
               <div style="display: flex; gap: 0.25rem; margin-top: 0.25rem;">
-                <InputText v-model="tempIncludeGroup" placeholder="Group DN" style="flex: 1;" @keyup.enter="addToList(editForm.conditions.includeGroups, tempIncludeGroup)" />
-                <Button icon="pi pi-plus" size="small" @click="addToList(editForm.conditions.includeGroups, tempIncludeGroup)" />
+                <InputText v-model="tempIncludeGroup" placeholder="Group DN" style="flex: 1;" @keyup.enter="addToList(editForm.conditions.includeGroups, tempIncludeGroup); tempIncludeGroup = ''" />
+                <Button icon="pi pi-plus" size="small" @click="addToList(editForm.conditions.includeGroups, tempIncludeGroup); tempIncludeGroup = ''" />
               </div>
               <div style="margin-top: 0.25rem; display: flex; flex-wrap: wrap; gap: 0.25rem;">
                 <Chip v-for="(g, i) in editForm.conditions.includeGroups" :key="i" :label="g" removable @remove="removeFromList(editForm.conditions.includeGroups, i)" />
@@ -465,8 +464,8 @@ function formatDate(d: string | null) {
             <div>
               <label style="font-size: 0.8125rem; font-weight: 600;">IP Ranges (CIDR)</label>
               <div style="display: flex; gap: 0.25rem; margin-top: 0.25rem;">
-                <InputText v-model="tempIpRange" placeholder="10.0.0.0/8" style="flex: 1;" @keyup.enter="addToList(editForm.conditions.ipRanges, tempIpRange)" />
-                <Button icon="pi pi-plus" size="small" @click="addToList(editForm.conditions.ipRanges, tempIpRange)" />
+                <InputText v-model="tempIpRange" placeholder="10.0.0.0/8" style="flex: 1;" @keyup.enter="addToList(editForm.conditions.ipRanges, tempIpRange); tempIpRange = ''" />
+                <Button icon="pi pi-plus" size="small" @click="addToList(editForm.conditions.ipRanges, tempIpRange); tempIpRange = ''" />
               </div>
               <div style="margin-top: 0.25rem; display: flex; flex-wrap: wrap; gap: 0.25rem;">
                 <Chip v-for="(r, i) in editForm.conditions.ipRanges" :key="i" :label="r" removable @remove="removeFromList(editForm.conditions.ipRanges, i)" />
@@ -482,7 +481,7 @@ function formatDate(d: string | null) {
               <label style="font-size: 0.8125rem; font-weight: 600;">Device Platforms</label>
               <div style="display: flex; gap: 0.25rem; margin-top: 0.25rem;">
                 <Select v-model="tempPlatform" :options="devicePlatforms" placeholder="Select..." style="flex: 1;" />
-                <Button icon="pi pi-plus" size="small" @click="addToList(editForm.conditions.devicePlatforms, tempPlatform)" />
+                <Button icon="pi pi-plus" size="small" @click="addToList(editForm.conditions.devicePlatforms, tempPlatform); tempPlatform = ''" />
               </div>
               <div style="margin-top: 0.25rem; display: flex; flex-wrap: wrap; gap: 0.25rem;">
                 <Chip v-for="(p, i) in editForm.conditions.devicePlatforms" :key="i" :label="p" removable @remove="removeFromList(editForm.conditions.devicePlatforms, i)" />
