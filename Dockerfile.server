@@ -2,7 +2,8 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
 # Copy Directory.build.props (defines TargetFramework) and project files, then restore
-COPY Directory.build.props ./
+COPY Directory.Build.props ./
+COPY Directory.Build.props src/
 COPY src/Directory.Core/*.csproj src/Directory.Core/
 COPY src/Directory.Schema/*.csproj src/Directory.Schema/
 COPY src/Directory.Security/*.csproj src/Directory.Security/
