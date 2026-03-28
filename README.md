@@ -1,3 +1,9 @@
+# This is 100% an AI Experiment
+
+Please please please take note that I built this as an experiment to see the hard edges of AI coding agents. Do not in any way shape or form look at this and think it's something you should be running for anything other than chasing rabbits down holes.
+
+All of this code is prompt driven. I have not written a single line and I haven't reviewed any of it for correctness.
+
 # Directory.NET
 
 A modern, cloud-native Active Directory-compatible directory service built on .NET 9 and Azure Cosmos DB.
