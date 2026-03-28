@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "directory-net.web.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "directory-net.web.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.web.service.type }}
+  ports:
+    - name: https
+      port: {{ .Values.web.service.port }}
+      targetPort: https
+      protocol: TCP
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "directory-net.web.selectorLabels" . | nindent 4 }}

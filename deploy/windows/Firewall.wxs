@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:fire="http://wixtoolset.org/schemas/v4/wxs/firewall">
+
+  <?include Variables.wxi ?>
+
+  <Fragment>
+    <ComponentGroup Id="FirewallComponents" Directory="SERVERDIR">
+
+      <!-- LDAP (TCP 389) -->
+      <Component Id="FirewallLdap" Guid="$(var.FirewallLdapGuid)">
+        <File Id="FirewallLdapAnchor" Source="!(bindpath.ServerPublish)\Directory.Server.exe" KeyPath="yes" />
+        <fire:FirewallException Id="FwLdapTcp"
+                                Name="Directory.NET - LDAP"
+                                Protocol="tcp"
+                                Port="389"
+                                Scope="any"
+                                Profile="all"
+                                Description="Allow inbound LDAP traffic for Directory.NET" />
+        <fire:FirewallException Id="FwLdapUdp"
+                                Name="Directory.NET - LDAP (UDP)"
+                                Protocol="udp"
+                                Port="389"
+                                Scope="any"
+                                Profile="all"
+                                Description="Allow inbound LDAP (UDP) traffic for Directory.NET" />
+      </Component>
+
+      <!-- LDAPS (TCP 636) -->
+      <Component Id="FirewallLdaps" Guid="$(var.FirewallLdapsGuid)">
+        <fire:FirewallException Id="FwLdaps"
+                                Name="Directory.NET - LDAPS"
+                                Protocol="tcp"
+                                Port="636"
+                                Scope="any"
+                                Profile="all"
+                                Description="Allow inbound LDAPS (LDAP over TLS) traffic for Directory.NET" />
+      </Component>
+
+      <!-- Kerberos (TCP/UDP 88) -->
+      <Component Id="FirewallKerberos" Guid="$(var.FirewallKerberosGuid)">
+        <fire:FirewallException Id="FwKerberosTcp"
+                                Name="Directory.NET - Kerberos"
+                                Protocol="tcp"
+                                Port="88"
+                                Scope="any"
+                                Profile="all"
+                                Description="Allow inbound Kerberos traffic for Directory.NET" />
+        <fire:FirewallException Id="FwKerberosUdp"
+                                Name="Directory.NET - Kerberos (UDP)"
+                                Protocol="udp"
+                                Port="88"
+                                Scope="any"
+                                Profile="all"
+                                Description="Allow inbound Kerberos (UDP) traffic for Directory.NET" />
+      </Component>
+
+      <!-- DNS (TCP/UDP 53) -->
+      <Component Id="FirewallDns" Guid="$(var.FirewallDnsGuid)">
+        <fire:FirewallException Id="FwDnsTcp"
+                                Name="Directory.NET - DNS"
+                                Protocol="tcp"
+                                Port="53"
+                                Scope="any"
+                                Profile="all"
+                                Description="Allow inbound DNS traffic for Directory.NET" />
+        <fire:FirewallException Id="FwDnsUdp"
+                                Name="Directory.NET - DNS (UDP)"
+                                Protocol="udp"
+                                Port="53"
+                                Scope="any"
+                                Profile="all"
+                                Description="Allow inbound DNS (UDP) traffic for Directory.NET" />
+      </Component>
+
+      <!-- HTTPS / Web Console (TCP 443) -->
+      <Component Id="FirewallHttps" Guid="$(var.FirewallHttpsGuid)">
+        <fire:FirewallException Id="FwHttps"
+                                Name="Directory.NET - HTTPS"
+                                Protocol="tcp"
+                                Port="443"
+                                Scope="any"
+                                Profile="all"
+                                Description="Allow inbound HTTPS traffic for Directory.NET Web Console" />
+      </Component>
+
+      <!-- Global Catalog (TCP 3268) -->
+      <Component Id="FirewallGc" Guid="$(var.FirewallGcGuid)">
+        <fire:FirewallException Id="FwGc"
+                                Name="Directory.NET - Global Catalog"
+                                Protocol="tcp"
+                                Port="3268"
+                                Scope="any"
+                                Profile="all"
+                                Description="Allow inbound Global Catalog traffic for Directory.NET" />
+      </Component>
+
+      <!-- Global Catalog SSL (TCP 3269) -->
+      <Component Id="FirewallGcs" Guid="$(var.FirewallGcsGuid)">
+        <fire:FirewallException Id="FwGcs"
+                                Name="Directory.NET - Global Catalog SSL"
+                                Protocol="tcp"
+                                Port="3269"
+                                Scope="any"
+                                Profile="all"
+                                Description="Allow inbound Global Catalog SSL traffic for Directory.NET" />
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>

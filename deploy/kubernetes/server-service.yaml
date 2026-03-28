@@ -1,0 +1,94 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: directory-server-headless
+  namespace: directory-net
+  labels:
+    app.kubernetes.io/name: directory-net
+    app.kubernetes.io/component: server
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: ldap
+      port: 389
+      targetPort: ldap
+      protocol: TCP
+    - name: ldaps
+      port: 636
+      targetPort: ldaps
+      protocol: TCP
+    - name: kerberos-tcp
+      port: 88
+      targetPort: kerberos-tcp
+      protocol: TCP
+    - name: kerberos-udp
+      port: 88
+      targetPort: kerberos-udp
+      protocol: UDP
+    - name: dns-tcp
+      port: 53
+      targetPort: dns-tcp
+      protocol: TCP
+    - name: dns-udp
+      port: 53
+      targetPort: dns-udp
+      protocol: UDP
+    - name: gc
+      port: 3268
+      targetPort: gc
+      protocol: TCP
+    - name: gcs
+      port: 3269
+      targetPort: gcs
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: directory-net
+    app.kubernetes.io/component: server
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: directory-server-lb
+  namespace: directory-net
+  labels:
+    app.kubernetes.io/name: directory-net
+    app.kubernetes.io/component: server
+spec:
+  type: LoadBalancer
+  ports:
+    - name: ldap
+      port: 389
+      targetPort: ldap
+      protocol: TCP
+    - name: ldaps
+      port: 636
+      targetPort: ldaps
+      protocol: TCP
+    - name: kerberos-tcp
+      port: 88
+      targetPort: kerberos-tcp
+      protocol: TCP
+    - name: kerberos-udp
+      port: 88
+      targetPort: kerberos-udp
+      protocol: UDP
+    - name: dns-tcp
+      port: 53
+      targetPort: dns-tcp
+      protocol: TCP
+    - name: dns-udp
+      port: 53
+      targetPort: dns-udp
+      protocol: UDP
+    - name: gc
+      port: 3268
+      targetPort: gc
+      protocol: TCP
+    - name: gcs
+      port: 3269
+      targetPort: gcs
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: directory-net
+    app.kubernetes.io/component: server

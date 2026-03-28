@@ -1,0 +1,11 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Fragment>
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="DirectoryNET">
+        <Directory Id="ServerDir" Name="server" />
+        <Directory Id="WebDir" Name="web" />
+        <Directory Id="CertsDir" Name="certs" />
+      </Directory>
+    </StandardDirectory>
+  </Fragment>
+</Wix>

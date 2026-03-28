@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging.EventLog" Version="10.0.5" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.15.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.15.1" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.15.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Directory.Core\Directory.Core.csproj" />
+    <ProjectReference Include="..\Directory.Schema\Directory.Schema.csproj" />
+    <ProjectReference Include="..\Directory.CosmosDb\Directory.CosmosDb.csproj" />
+    <ProjectReference Include="..\Directory.Ldap\Directory.Ldap.csproj" />
+    <ProjectReference Include="..\Directory.Kerberos\Directory.Kerberos.csproj" />
+    <ProjectReference Include="..\Directory.Dns\Directory.Dns.csproj" />
+    <ProjectReference Include="..\Directory.Security\Directory.Security.csproj" />
+    <ProjectReference Include="..\Directory.Replication\Directory.Replication.csproj" />
+    <ProjectReference Include="..\Directory.Rpc\Directory.Rpc.csproj" />
+  </ItemGroup>
+</Project>

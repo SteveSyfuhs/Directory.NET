@@ -1,0 +1,188 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:fw="http://wixtoolset.org/schemas/v4/wxs/firewall">
+  <Fragment>
+    <ComponentGroup Id="FirewallComponents" Directory="INSTALLFOLDER">
+
+      <!-- LDAP 389/TCP -->
+      <Component Id="FW_LDAP" Guid="1A3B5C7D-9E2F-4A6B-8C1D-3E5F7A9B2C4D">
+        <CreateFolder />
+        <fw:FirewallException Id="FwLdap"
+          Name="DirectoryNET-LDAP"
+          Protocol="tcp"
+          Port="389"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET LDAP" />
+      </Component>
+
+      <!-- LDAPS 636/TCP -->
+      <Component Id="FW_LDAPS" Guid="2B4C6D8E-AF31-4B7C-9D2E-4F6A8B1C3D5E">
+        <CreateFolder />
+        <fw:FirewallException Id="FwLdaps"
+          Name="DirectoryNET-LDAPS"
+          Protocol="tcp"
+          Port="636"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET LDAPS" />
+      </Component>
+
+      <!-- Kerberos 88/TCP -->
+      <Component Id="FW_KerbTcp" Guid="3C5D7E9F-B042-4C8D-AE3F-5A7B9C2D4E6F">
+        <CreateFolder />
+        <fw:FirewallException Id="FwKerbTcp"
+          Name="DirectoryNET-Kerberos"
+          Protocol="tcp"
+          Port="88"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET Kerberos (TCP)" />
+      </Component>
+
+      <!-- Kerberos 88/UDP -->
+      <Component Id="FW_KerbUdp" Guid="4D6E8FA1-C153-4D9E-BF41-6B8C0D3E5F71">
+        <CreateFolder />
+        <fw:FirewallException Id="FwKerbUdp"
+          Name="DirectoryNET-KerbUDP"
+          Protocol="udp"
+          Port="88"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET Kerberos (UDP)" />
+      </Component>
+
+      <!-- DNS 53/TCP -->
+      <Component Id="FW_DnsTcp" Guid="5E7FA1B2-D264-4EAF-C052-7C9D1E4F6A82">
+        <CreateFolder />
+        <fw:FirewallException Id="FwDnsTcp"
+          Name="DirectoryNET-DNS-TCP"
+          Protocol="tcp"
+          Port="53"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET DNS (TCP)" />
+      </Component>
+
+      <!-- DNS 53/UDP -->
+      <Component Id="FW_DnsUdp" Guid="6FA1B2C3-E375-4FB1-D163-8DAE2F5A7B93">
+        <CreateFolder />
+        <fw:FirewallException Id="FwDnsUdp"
+          Name="DirectoryNET-DNS-UDP"
+          Protocol="udp"
+          Port="53"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET DNS (UDP)" />
+      </Component>
+
+      <!-- RPC Endpoint Mapper 1135/TCP -->
+      <Component Id="FW_RPC" Guid="71B2C3D4-F486-41C2-E274-9EBF3A6B8CA4">
+        <CreateFolder />
+        <fw:FirewallException Id="FwRpc"
+          Name="DirectoryNET-RPC"
+          Protocol="tcp"
+          Port="1135"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET RPC Endpoint Mapper" />
+      </Component>
+
+      <!-- RPC Service 49664/TCP -->
+      <Component Id="FW_RPCSvc" Guid="82C3D4E5-A597-42D3-F385-AFC14B7C9DB5">
+        <CreateFolder />
+        <fw:FirewallException Id="FwRpcSvc"
+          Name="DirectoryNET-RPCSvc"
+          Protocol="tcp"
+          Port="49664"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET RPC Service" />
+      </Component>
+
+      <!-- Global Catalog 3268/TCP -->
+      <Component Id="FW_GC" Guid="93D4E5F6-B6A8-43E4-A496-BAD25C8DAEC6">
+        <CreateFolder />
+        <fw:FirewallException Id="FwGc"
+          Name="DirectoryNET-GC"
+          Protocol="tcp"
+          Port="3268"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET Global Catalog" />
+      </Component>
+
+      <!-- Global Catalog TLS 3269/TCP -->
+      <Component Id="FW_GCTLS" Guid="A4E5F6A7-C7B9-44F5-B5A7-CBE36D9EBFD7">
+        <CreateFolder />
+        <fw:FirewallException Id="FwGcTls"
+          Name="DirectoryNET-GCTLS"
+          Protocol="tcp"
+          Port="3269"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET Global Catalog (TLS)" />
+      </Component>
+
+      <!-- Kpasswd 464/TCP -->
+      <Component Id="FW_KpasswdTcp" Guid="B5F6A7B8-D8CA-45A6-C6B8-DCF47EAFC1E8">
+        <CreateFolder />
+        <fw:FirewallException Id="FwKpasswdTcp"
+          Name="DirectoryNET-Kpasswd"
+          Protocol="tcp"
+          Port="464"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET Kpasswd (TCP)" />
+      </Component>
+
+      <!-- Kpasswd 464/UDP -->
+      <Component Id="FW_KpasswdUdp" Guid="C6A7B8C9-E9DB-46B7-D7C9-EDA58FB1D2F9">
+        <CreateFolder />
+        <fw:FirewallException Id="FwKpasswdUdp"
+          Name="DirectoryNET-KpwdUDP"
+          Protocol="udp"
+          Port="464"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET Kpasswd (UDP)" />
+      </Component>
+
+      <!-- CLDAP 389/UDP -->
+      <Component Id="FW_CLDAP" Guid="D7B8C9DA-FAEC-47C8-E8DA-FEB69AC2E3A1">
+        <CreateFolder />
+        <fw:FirewallException Id="FwCldap"
+          Name="DirectoryNET-CLDAP"
+          Protocol="udp"
+          Port="389"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET CLDAP (UDP)" />
+      </Component>
+
+      <!-- DRS Replication 9389/TCP -->
+      <Component Id="FW_DRS" Guid="E8C9DAEB-ABF0-48D9-F9EB-AFC7AB03F4B2">
+        <CreateFolder />
+        <fw:FirewallException Id="FwDrs"
+          Name="DirectoryNET-DRS"
+          Protocol="tcp"
+          Port="9389"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET DRS Replication" />
+      </Component>
+
+      <!-- Web Management Console 6001/TCP -->
+      <Component Id="FW_Web" Guid="F9DAEBFC-BC01-49EA-A1FC-B1D8BC14A5C3">
+        <CreateFolder />
+        <fw:FirewallException Id="FwWeb"
+          Name="DirectoryNET-WebHTTPS"
+          Protocol="tcp"
+          Port="6001"
+          Scope="any"
+          Profile="domain,private"
+          Description="Directory.NET Web Management Console" />
+      </Component>
+
+    </ComponentGroup>
+  </Fragment>
+</Wix>

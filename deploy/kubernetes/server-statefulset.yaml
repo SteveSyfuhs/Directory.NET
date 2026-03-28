@@ -1,0 +1,141 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: directory-server
+  namespace: directory-net
+  labels:
+    app.kubernetes.io/name: directory-net
+    app.kubernetes.io/component: server
+spec:
+  serviceName: directory-server-headless
+  replicas: 2
+  podManagementPolicy: OrderedReady
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: directory-net
+      app.kubernetes.io/component: server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: directory-net
+        app.kubernetes.io/component: server
+    spec:
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/component
+                      operator: In
+                      values:
+                        - server
+                topologyKey: kubernetes.io/hostname
+      initContainers:
+        - name: wait-for-cosmosdb
+          image: curlimages/curl:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for Cosmos DB to be reachable..."
+              until curl -sf --max-time 5 -o /dev/null "$COSMOSDB_ENDPOINT" 2>/dev/null; do
+                echo "Cosmos DB not ready, retrying in 5s..."
+                sleep 5
+              done
+              echo "Cosmos DB is reachable."
+          env:
+            - name: COSMOSDB_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: directory-net-secrets
+                  key: cosmosdb-connection-string
+      containers:
+        - name: server
+          image: ghcr.io/directory-net/server:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          ports:
+            - name: ldap
+              containerPort: 389
+              protocol: TCP
+            - name: ldaps
+              containerPort: 636
+              protocol: TCP
+            - name: kerberos-tcp
+              containerPort: 88
+              protocol: TCP
+            - name: kerberos-udp
+              containerPort: 88
+              protocol: UDP
+            - name: dns-tcp
+              containerPort: 53
+              protocol: TCP
+            - name: dns-udp
+              containerPort: 53
+              protocol: UDP
+            - name: gc
+              containerPort: 3268
+              protocol: TCP
+            - name: gcs
+              containerPort: 3269
+              protocol: TCP
+          env:
+            - name: DOTNET_ENVIRONMENT
+              value: Production
+            - name: CosmosDb__ConnectionString
+              valueFrom:
+                secretKeyRef:
+                  name: directory-net-secrets
+                  key: cosmosdb-connection-string
+            - name: DcNode__Hostname
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          livenessProbe:
+            tcpSocket:
+              port: ldap
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: ldap
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+          volumeMounts:
+            - name: config
+              mountPath: /app/appsettings.Production.json
+              subPath: server-appsettings.json
+              readOnly: true
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: directory-net-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi

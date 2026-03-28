@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/Build/">
+    <File Path=".gitignore" />
+    <File Path="Directory.build.props" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Directory.Core/Directory.Core.csproj" />
+    <Project Path="src/Directory.CosmosDb/Directory.CosmosDb.csproj" />
+    <Project Path="src/Directory.Dns/Directory.Dns.csproj" />
+    <Project Path="src/Directory.Kerberos/Directory.Kerberos.csproj" />
+    <Project Path="src/Directory.Ldap/Directory.Ldap.csproj" />
+    <Project Path="src/Directory.Replication/Directory.Replication.csproj" />
+    <Project Path="src/Directory.Rpc/Directory.Rpc.csproj" />
+    <Project Path="src/Directory.Schema/Directory.Schema.csproj" />
+    <Project Path="src/Directory.Security/Directory.Security.csproj" />
+    <Project Path="src/Directory.Server/Directory.Server.csproj" />
+    <Project Path="src/Directory.Web/Directory.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Directory.Tests/Directory.Tests.csproj" />
+  </Folder>
+</Solution>

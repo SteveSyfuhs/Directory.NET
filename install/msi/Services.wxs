@@ -1,0 +1,73 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Fragment>
+    <ComponentGroup Id="ServiceComponents" Directory="ServerDir">
+      <Component Id="DirectoryServerService" Guid="D8F14A2E-7B63-4C91-AE5D-2F9C3B8A1E67">
+        <File Id="DirectoryServerExe"
+              Source="$(var.ServerPublishDir)\Directory.Server.exe"
+              KeyPath="yes" />
+        <util:EventSource xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+            Name="DirectoryNET-Server"
+            Log="DirectoryNET"
+            EventMessageFile="[SystemFolder]mscoree.dll" />
+        <ServiceInstall
+          Id="InstallDirectoryServer"
+          Name="DirectoryServer"
+          DisplayName="Directory.NET Server"
+          Description="Active Directory compatible protocol server (LDAP, Kerberos, DNS, RPC)"
+          Type="ownProcess"
+          Start="auto"
+          ErrorControl="normal"
+          Account="LocalSystem">
+          <ServiceDependency Id="Tcpip" />
+          <ServiceConfig
+            DelayedAutoStart="yes"
+            OnInstall="yes"
+            OnReinstall="yes" />
+        </ServiceInstall>
+        <ServiceControl
+          Id="ControlDirectoryServer"
+          Name="DirectoryServer"
+          Start="install"
+          Stop="both"
+          Remove="uninstall"
+          Wait="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="WebServiceComponents" Directory="WebDir">
+      <Component Id="DirectoryWebService" Guid="E5A27C4B-1D89-4F36-B7E2-9C8D3A6F5E14">
+        <File Id="DirectoryWebExe"
+              Source="$(var.WebPublishDir)\Directory.Web.exe"
+              KeyPath="yes" />
+        <util:EventSource xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+            Name="DirectoryNET-Web"
+            Log="DirectoryNET"
+            EventMessageFile="[SystemFolder]mscoree.dll" />
+        <ServiceInstall
+          Id="InstallDirectoryWeb"
+          Name="DirectoryWeb"
+          DisplayName="Directory.NET Web Console"
+          Description="Web-based management console for Directory.NET"
+          Type="ownProcess"
+          Start="auto"
+          ErrorControl="normal"
+          Account="LocalSystem">
+          <ServiceDependency Id="DirectoryServer" />
+          <ServiceConfig
+            DelayedAutoStart="yes"
+            OnInstall="yes"
+            OnReinstall="yes" />
+        </ServiceInstall>
+        <ServiceControl
+          Id="ControlDirectoryWeb"
+          Name="DirectoryWeb"
+          Start="install"
+          Stop="both"
+          Remove="uninstall"
+          Wait="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

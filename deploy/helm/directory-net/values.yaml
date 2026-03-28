@@ -1,0 +1,87 @@
+global:
+  domain: contoso.com
+
+server:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/directory-net/server
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 500m
+      memory: 512Mi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  ports:
+    ldap: 389
+    ldaps: 636
+    kerberos: 88
+    dns: 53
+    gc: 3268
+    gcs: 3269
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+web:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/directory-net/web
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  service:
+    type: LoadBalancer
+    port: 443
+  ingress:
+    enabled: false
+    className: nginx
+    annotations: {}
+    hosts:
+      - host: admin.contoso.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls: []
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+cosmosdb:
+  connectionString: ""  # Required: set via --set or secret
+  databaseName: DirectoryNET
+  defaultThroughput: 1000
+
+redis:
+  enabled: true
+  architecture: standalone
+
+tls:
+  certSecret: ""  # Name of existing TLS secret, or leave empty to use auto-generated
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""

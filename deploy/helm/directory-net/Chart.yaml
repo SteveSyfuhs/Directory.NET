@@ -1,0 +1,17 @@
+apiVersion: v2
+name: directory-net
+description: Modern Active Directory-compatible service
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - ldap
+  - kerberos
+  - dns
+  - active-directory
+  - identity
+maintainers:
+  - name: Directory.NET Team
+home: https://github.com/directory-net
+sources:
+  - https://github.com/directory-net

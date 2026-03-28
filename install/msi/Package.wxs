@@ -1,0 +1,101 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <Package Name="Directory.NET Active Directory Service"
+           Manufacturer="Directory.NET"
+           Version="1.0.0.0"
+           UpgradeCode="B7E4F2A1-9C3D-4E5F-8A6B-1D2E3F4A5B6C"
+           Scope="perMachine"
+           InstallerVersion="500"
+           Compressed="yes">
+
+    <SummaryInformation Description="Directory.NET Active Directory Service Installer" />
+
+    <!-- Major upgrade: removes older versions before installing -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+    <!-- Embed all files in the MSI cabinet -->
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Custom public properties for user-supplied configuration -->
+    <Property Id="COSMOS_CONNECTION_STRING" Secure="yes" />
+    <Property Id="DOMAIN_NAME" Secure="yes" />
+
+    <!-- UI: standard install-dir dialog set -->
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <ui:WixUI Id="WixUI_InstallDir" />
+
+    <!-- License (optional placeholder) -->
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" Overridable="yes" />
+
+    <!-- Features -->
+    <Feature Id="ServerFeature" Title="Directory.NET Server"
+             Description="Active Directory compatible protocol server (LDAP, Kerberos, DNS, RPC)"
+             Level="1" AllowAbsent="no">
+      <ComponentGroupRef Id="ServerFiles" />
+      <ComponentGroupRef Id="ServiceComponents" />
+      <ComponentGroupRef Id="ServerConfigComponent" />
+      <ComponentGroupRef Id="FirewallComponents" />
+      <ComponentRef Id="CertsDirComponent" />
+    </Feature>
+
+    <Feature Id="WebFeature" Title="Directory.NET Web Console"
+             Description="Web-based management console for Directory.NET"
+             Level="1" AllowAbsent="yes">
+      <ComponentGroupRef Id="WebFiles" />
+      <ComponentGroupRef Id="WebServiceComponents" />
+      <ComponentGroupRef Id="WebConfigComponent" />
+    </Feature>
+
+  </Package>
+
+  <!-- Server published files (excluding exe and config, which are handled explicitly) -->
+  <Fragment>
+    <ComponentGroup Id="ServerFiles" Directory="ServerDir">
+      <Files Include="$(var.ServerPublishDir)\**"
+             Exclude="$(var.ServerPublishDir)\Directory.Server.exe;$(var.ServerPublishDir)\appsettings.json;$(var.ServerPublishDir)\appsettings.*.json" />
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- Web published files (excluding exe and config, which are handled explicitly) -->
+  <Fragment>
+    <ComponentGroup Id="WebFiles" Directory="WebDir">
+      <Files Include="$(var.WebPublishDir)\**"
+             Exclude="$(var.WebPublishDir)\Directory.Web.exe;$(var.WebPublishDir)\appsettings.json;$(var.WebPublishDir)\appsettings.*.json" />
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- Server appsettings.json — NeverOverwrite so upgrades preserve user config -->
+  <Fragment>
+    <ComponentGroup Id="ServerConfigComponent" Directory="ServerDir">
+      <Component Id="ServerAppSettings" Guid="A1D72E3F-84B9-4C17-9E5A-6F3B8D2C1A04">
+        <File Id="ServerAppSettingsJson"
+              Source="$(var.ServerPublishDir)\appsettings.json"
+              KeyPath="yes"
+              NeverOverwrite="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- Web appsettings.json — NeverOverwrite so upgrades preserve user config -->
+  <Fragment>
+    <ComponentGroup Id="WebConfigComponent" Directory="WebDir">
+      <Component Id="WebAppSettings" Guid="C4E89F1A-5B27-4D63-8A91-3E7C6D5F2B08">
+        <File Id="WebAppSettingsJson"
+              Source="$(var.WebPublishDir)\appsettings.json"
+              KeyPath="yes"
+              NeverOverwrite="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- Empty certs directory placeholder -->
+  <Fragment>
+    <DirectoryRef Id="CertsDir">
+      <Component Id="CertsDirComponent" Guid="F2A7B3D1-6E84-49C5-B1D3-8A9E4F5C6D72">
+        <CreateFolder />
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+
+</Wix>

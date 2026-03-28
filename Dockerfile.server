@@ -1,0 +1,41 @@
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+WORKDIR /src
+
+# Copy project files and restore
+COPY src/Directory.Core/*.csproj src/Directory.Core/
+COPY src/Directory.Schema/*.csproj src/Directory.Schema/
+COPY src/Directory.Security/*.csproj src/Directory.Security/
+COPY src/Directory.CosmosDb/*.csproj src/Directory.CosmosDb/
+COPY src/Directory.Ldap/*.csproj src/Directory.Ldap/
+COPY src/Directory.Rpc/*.csproj src/Directory.Rpc/
+COPY src/Directory.Replication/*.csproj src/Directory.Replication/
+COPY src/Directory.Dns/*.csproj src/Directory.Dns/
+COPY src/Directory.Kerberos/*.csproj src/Directory.Kerberos/
+COPY src/Directory.Server/*.csproj src/Directory.Server/
+RUN dotnet restore src/Directory.Server/Directory.Server.csproj
+
+# Copy source and build
+COPY src/ src/
+RUN dotnet publish src/Directory.Server/Directory.Server.csproj -c Release -o /app
+
+FROM mcr.microsoft.com/dotnet/runtime:9.0
+WORKDIR /app
+COPY --from=build /app .
+
+# LDAP / LDAPS
+EXPOSE 389 636
+# Kerberos / Kpasswd
+EXPOSE 88 464
+# DNS
+EXPOSE 53/tcp 53/udp
+# Global Catalog / Global Catalog TLS
+EXPOSE 3268 3269
+# RPC Endpoint Mapper / RPC Service
+EXPOSE 1135 49664
+# DRS HTTP
+EXPOSE 9389
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD dotnet Directory.Server.dll --health-check || exit 1
+
+ENTRYPOINT ["dotnet", "Directory.Server.dll"]

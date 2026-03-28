@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Kerberos.NET" Version="4.*" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.5" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Directory.Core\Directory.Core.csproj" />
+    <ProjectReference Include="..\Directory.Security\Directory.Security.csproj" />
+  </ItemGroup>
+</Project>

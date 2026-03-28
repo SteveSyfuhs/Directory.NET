@@ -1,0 +1,13 @@
+<Project Sdk="WixToolset.Sdk/5.0.0">
+  <PropertyGroup>
+    <OutputType>Package</OutputType>
+    <InstallerPlatform>x64</InstallerPlatform>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Product.wxs" />
+    <Content Include="ServiceInstaller.wxs" />
+    <Content Include="Firewall.wxs" />
+    <Content Include="Variables.wxi" />
+  </ItemGroup>
+</Project>

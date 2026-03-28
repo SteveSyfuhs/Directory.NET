@@ -1,0 +1,46 @@
+Directory.NET has been deployed successfully!
+
+{{- if .Values.cosmosdb.connectionString }}
+Cosmos DB: Connected to configured instance.
+{{- else }}
+WARNING: No Cosmos DB connection string provided.
+Set it via: helm upgrade {{ .Release.Name }} --set cosmosdb.connectionString="YOUR_CONNECTION_STRING"
+{{- end }}
+
+=== Directory Server (LDAP/Kerberos/DNS) ===
+
+The Directory Server is running as a StatefulSet with {{ .Values.server.replicaCount }} replicas.
+
+Get the external IP for the server LoadBalancer:
+  kubectl get svc {{ include "directory-net.server.fullname" . }}-lb -n {{ .Release.Namespace }}
+
+Protocol Ports:
+  LDAP:     {{ .Values.server.ports.ldap }}
+  LDAPS:    {{ .Values.server.ports.ldaps }}
+  Kerberos: {{ .Values.server.ports.kerberos }}
+  DNS:      {{ .Values.server.ports.dns }}
+  GC:       {{ .Values.server.ports.gc }}
+  GCS:      {{ .Values.server.ports.gcs }}
+
+=== Web Management Portal ===
+
+{{- if .Values.web.ingress.enabled }}
+Access the web portal at:
+{{- range .Values.web.ingress.hosts }}
+  https://{{ .host }}
+{{- end }}
+{{- else }}
+Get the web portal URL:
+  kubectl get svc {{ include "directory-net.web.fullname" . }} -n {{ .Release.Namespace }}
+{{- end }}
+
+=== Quick Verification ===
+
+Check pod status:
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+Check logs:
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=server --tail=50
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=web --tail=50
+
+For more information, visit: https://github.com/directory-net

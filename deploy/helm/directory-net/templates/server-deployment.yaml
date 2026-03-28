@@ -1,0 +1,160 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "directory-net.server.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "directory-net.server.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "directory-net.server.fullname" . }}-headless
+  replicas: {{ .Values.server.replicaCount }}
+  podManagementPolicy: OrderedReady
+  selector:
+    matchLabels:
+      {{- include "directory-net.server.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "directory-net.server.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "directory-net.serviceAccountName" . }}
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/component
+                      operator: In
+                      values:
+                        - server
+                topologyKey: kubernetes.io/hostname
+        {{- with .Values.server.affinity }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.server.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.server.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: wait-for-cosmosdb
+          image: curlimages/curl:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Waiting for Cosmos DB to be reachable..."
+              until curl -sf --max-time 5 -o /dev/null "$COSMOSDB_ENDPOINT" 2>/dev/null; do
+                echo "Cosmos DB not ready, retrying in 5s..."
+                sleep 5
+              done
+              echo "Cosmos DB is reachable."
+          env:
+            - name: COSMOSDB_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "directory-net.secretName" . }}
+                  key: cosmosdb-connection-string
+      containers:
+        - name: server
+          image: "{{ .Values.server.image.repository }}:{{ .Values.server.image.tag }}"
+          imagePullPolicy: {{ .Values.server.image.pullPolicy }}
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: false
+            allowPrivilegeEscalation: false
+          ports:
+            - name: ldap
+              containerPort: {{ .Values.server.ports.ldap }}
+              protocol: TCP
+            - name: ldaps
+              containerPort: {{ .Values.server.ports.ldaps }}
+              protocol: TCP
+            - name: kerberos-tcp
+              containerPort: {{ .Values.server.ports.kerberos }}
+              protocol: TCP
+            - name: kerberos-udp
+              containerPort: {{ .Values.server.ports.kerberos }}
+              protocol: UDP
+            - name: dns-tcp
+              containerPort: {{ .Values.server.ports.dns }}
+              protocol: TCP
+            - name: dns-udp
+              containerPort: {{ .Values.server.ports.dns }}
+              protocol: UDP
+            - name: gc
+              containerPort: {{ .Values.server.ports.gc }}
+              protocol: TCP
+            - name: gcs
+              containerPort: {{ .Values.server.ports.gcs }}
+              protocol: TCP
+          env:
+            - name: DOTNET_ENVIRONMENT
+              value: Production
+            - name: CosmosDb__ConnectionString
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "directory-net.secretName" . }}
+                  key: cosmosdb-connection-string
+            - name: DcNode__Hostname
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          livenessProbe:
+            tcpSocket:
+              port: ldap
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: ldap
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.server.resources | nindent 12 }}
+          volumeMounts:
+            - name: config
+              mountPath: /app/appsettings.Production.json
+              subPath: server-appsettings.json
+              readOnly: true
+            {{- if .Values.server.persistence.enabled }}
+            - name: data
+              mountPath: /data
+            {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "directory-net.configMapName" . }}
+  {{- if .Values.server.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        {{- if .Values.server.persistence.storageClass }}
+        storageClassName: {{ .Values.server.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.server.persistence.size }}
+  {{- end }}

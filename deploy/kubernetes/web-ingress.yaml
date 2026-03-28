@@ -1,0 +1,28 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: directory-web
+  namespace: directory-net
+  labels:
+    app.kubernetes.io/name: directory-net
+    app.kubernetes.io/component: web
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - admin.contoso.com
+      secretName: directory-web-tls
+  rules:
+    - host: admin.contoso.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: directory-web
+                port:
+                  name: https

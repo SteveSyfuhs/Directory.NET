@@ -1,0 +1,36 @@
+<Project>
+	<PropertyGroup>
+		<Copyright>Copyright (c) Steve Syfuhs</Copyright>
+
+		<TargetFramework>net10.0</TargetFramework>
+
+		<MinClientVersion>2.12</MinClientVersion>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<Authors>Steve Syfuhs</Authors>
+		<Company>Steve Syfuhs</Company>
+		<!--<PackageProjectUrl>https://github.com/SteveSyfuhs/ManagedChaos</PackageProjectUrl>-->
+		<NoWarn>$(NoWarn);1701;1702;CS1591;NU5105</NoWarn>
+		<DefaultLanguage>en-US</DefaultLanguage>
+		<IncludeSymbols>false</IncludeSymbols>
+		<DebugType>embedded</DebugType>
+		<IsTestProject>$(MSBuildProjectName.Contains('Tests'))</IsTestProject>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<LangVersion>preview</LangVersion>
+		<SignAssembly>true</SignAssembly>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>disable</Nullable>
+		<!--<PackageLicenseExpression>MIT</PackageLicenseExpression>-->
+		<!--<GeneratePackageOnBuild Condition=" '$(IsTestProject)' != 'true' and '$(CreatePackage)' == 'true' ">true</GeneratePackageOnBuild>-->
+		<!--<PackageOutputPath>$(MSBuildThisFileDirectory)artifacts</PackageOutputPath>-->
+		<!--<AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)key.snk</AssemblyOriginatorKeyFile>-->
+		<!--<CodeAnalysisRuleSet>$(MSBuildThisFileDirectory)CodeAnalysisRules.ruleset</CodeAnalysisRuleSet>-->
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!--<PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.201" PrivateAssets="All"/>-->
+		<!--<PackageReference Include="Nerdbank.GitVersioning" Version="3.9.50" PrivateAssets="all" />-->
+	</ItemGroup>
+
+
+</Project>

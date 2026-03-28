@@ -1,0 +1,70 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore src/src.sln
+
+      - name: Build solution
+        run: dotnet build src/src.sln --configuration Release --no-restore
+
+      - name: Run tests
+        run: dotnet test tests/Directory.Tests/Directory.Tests.csproj --configuration Release --verbosity normal --collect:"XPlat Code Coverage" --results-directory ./coverage
+
+      - name: Upload coverage report
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ./coverage/**/coverage.cobertura.xml
+          retention-days: 14
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: src/Directory.Web/ClientApp/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: src/Directory.Web/ClientApp
+        run: npm ci
+
+      - name: TypeScript check
+        working-directory: src/Directory.Web/ClientApp
+        run: npx vue-tsc --noEmit
+
+      - name: Build frontend
+        working-directory: src/Directory.Web/ClientApp
+        run: npm run build
+
+      - name: Upload build artifacts
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            src/Directory.Web/ClientApp/dist
+          retention-days: 7

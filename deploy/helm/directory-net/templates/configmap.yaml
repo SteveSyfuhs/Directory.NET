@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "directory-net.configMapName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "directory-net.labels" . | nindent 4 }}
+data:
+  server-appsettings.json: |
+    {
+      "Logging": {
+        "LogLevel": {
+          "Default": "Information",
+          "Microsoft": "Warning",
+          "Directory.Ldap": "Information",
+          "Directory.Kerberos": "Information",
+          "Directory.Dns": "Information",
+          "Directory.Rpc": "Information"
+        }
+      },
+      "CosmosDb": {
+        "DatabaseName": {{ .Values.cosmosdb.databaseName | quote }},
+        "DefaultThroughput": {{ .Values.cosmosdb.defaultThroughput }}
+      },
+      "Ldap": {
+        "Port": {{ .Values.server.ports.ldap }},
+        "TlsPort": {{ .Values.server.ports.ldaps }},
+        "GcPort": {{ .Values.server.ports.gc }},
+        "GcTlsPort": {{ .Values.server.ports.gcs }},
+        "MaxConnections": 10000,
+        "MaxPageSize": 1000,
+        "DefaultDomain": "DC={{ .Values.global.domain | replace "." ",DC=" }}"
+      },
+      "Kerberos": {
+        "DefaultRealm": {{ .Values.global.domain | upper | quote }},
+        "Port": {{ .Values.server.ports.kerberos }},
+        "KpasswdPort": 464,
+        "MaximumSkew": "00:05:00",
+        "SessionLifetime": "10:00:00",
+        "MaximumRenewalWindow": "7.00:00:00"
+      },
+      "Dns": {
+        "Port": {{ .Values.server.ports.dns }},
+        "Domains": [{{ .Values.global.domain | quote }}],
+        "DefaultTtl": 600
+      },
+      "NamingContexts": {
+        "DomainDn": "DC={{ .Values.global.domain | replace "." ",DC=" }}",
+        "ForestDnsName": {{ .Values.global.domain | quote }}
+      },
+      "DcNode": {
+        "SiteName": "Default-First-Site-Name",
+        "TenantId": "default",
+        "DomainDn": "DC={{ .Values.global.domain | replace "." ",DC=" }}",
+        "BindAddresses": ["0.0.0.0"]
+      }
+    }
+  web-appsettings.json: |
+    {
+      "Logging": {
+        "LogLevel": {
+          "Default": "Information",
+          "Microsoft": "Warning",
+          "Microsoft.AspNetCore": "Warning"
+        }
+      },
+      "CosmosDb": {
+        "DatabaseName": {{ .Values.cosmosdb.databaseName | quote }},
+        "DefaultThroughput": {{ .Values.cosmosdb.defaultThroughput }}
+      },
+      "NamingContexts": {
+        "DomainDn": "DC={{ .Values.global.domain | replace "." ",DC=" }}",
+        "ForestDnsName": {{ .Values.global.domain | quote }}
+      },
+      "DcNode": {
+        "SiteName": "Default-First-Site-Name",
+        "TenantId": "default",
+        "DomainDn": "DC={{ .Values.global.domain | replace "." ",DC=" }}",
+        "BindAddresses": ["0.0.0.0"]
+      },
+      "AllowedHosts": "*"
+    }

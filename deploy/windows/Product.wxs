@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <?include Variables.wxi ?>
+
+  <Package Name="$(var.ProductName)"
+           Version="$(var.ProductVersion)"
+           Manufacturer="$(var.Manufacturer)"
+           UpgradeCode="$(var.UpgradeCode)"
+           Compressed="yes"
+           InstallerVersion="500"
+           Scope="perMachine">
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of $(var.ProductName) is already installed."
+                  AllowSameVersionUpgrades="yes" />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- ── Properties ──────────────────────────────────────────────── -->
+
+    <Property Id="COSMOS_CONNECTION_STRING" Secure="yes" />
+    <Property Id="DOMAIN_NAME" Value="" />
+    <Property Id="SOURCE_DC_URL" Value="" />
+    <Property Id="INSTALL_TYPE" Value="Both" />
+
+    <!-- ── Features ────────────────────────────────────────────────── -->
+
+    <Feature Id="ServerFeature"
+             Title="Directory Server"
+             Description="Core directory server (LDAP, Kerberos, DNS)"
+             Level="1"
+             AllowAbsent="yes">
+      <ComponentGroupRef Id="ServerComponents" />
+      <ComponentGroupRef Id="ServerServiceComponents" />
+      <ComponentGroupRef Id="FirewallComponents" />
+    </Feature>
+
+    <Feature Id="WebFeature"
+             Title="Web Management Console"
+             Description="Web-based administration UI"
+             Level="1"
+             AllowAbsent="yes">
+      <ComponentGroupRef Id="WebComponents" />
+      <ComponentGroupRef Id="WebServiceComponents" />
+    </Feature>
+
+    <!-- ── Directory Structure ─────────────────────────────────────── -->
+
+    <StandardDirectory Id="ProgramFiles6432Folder">
+      <Directory Id="INSTALLFOLDER" Name="DirectoryNET">
+        <Directory Id="SERVERDIR" Name="$(var.ServerInstallDir)" />
+        <Directory Id="WEBDIR" Name="$(var.WebInstallDir)" />
+      </Directory>
+    </StandardDirectory>
+
+    <!-- ── Server Binaries ─────────────────────────────────────────── -->
+
+    <ComponentGroup Id="ServerComponents" Directory="SERVERDIR">
+      <Component Id="ServerExe" Guid="*">
+        <File Id="DirectoryServer.exe"
+              Source="!(bindpath.ServerPublish)\Directory.Server.exe"
+              KeyPath="yes" />
+      </Component>
+      <Component Id="ServerConfig" Guid="*">
+        <File Id="ServerAppSettings"
+              Source="!(bindpath.ServerPublish)\appsettings.json"
+              KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- ── Web Binaries ────────────────────────────────────────────── -->
+
+    <ComponentGroup Id="WebComponents" Directory="WEBDIR">
+      <Component Id="WebExe" Guid="*">
+        <File Id="DirectoryWeb.exe"
+              Source="!(bindpath.WebPublish)\Directory.Web.exe"
+              KeyPath="yes" />
+      </Component>
+      <Component Id="WebConfig" Guid="*">
+        <File Id="WebAppSettings"
+              Source="!(bindpath.WebPublish)\appsettings.json"
+              KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- ── Custom UI Sequence ──────────────────────────────────────── -->
+
+    <ui:WixUI Id="WixUI_DirectoryNET" />
+
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+    <WixVariable Id="WixUIBannerBmp" Value="banner.bmp" />
+    <WixVariable Id="WixUIDialogBmp" Value="dialog.bmp" />
+
+    <!-- Custom dialogs for install parameters -->
+
+    <UI>
+      <!-- Install type selection dialog -->
+      <Dialog Id="InstallTypeDlg" Width="370" Height="270" Title="Installation Type">
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15"
+                 Text="{\WixUI_Font_Title}Installation Type" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15"
+                 Text="Select the components to install." />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+
+        <Control Id="ServerOnly" Type="RadioButtonGroup" X="25" Y="65" Width="300" Height="80"
+                 Property="INSTALL_TYPE">
+          <RadioButtonGroup Property="INSTALL_TYPE">
+            <RadioButton Value="Both" X="0" Y="0" Width="300" Height="20"
+                         Text="Complete — Server and Web Console" />
+            <RadioButton Value="Server" X="0" Y="25" Width="300" Height="20"
+                         Text="Server Only — Directory services without Web UI" />
+            <RadioButton Value="Web" X="0" Y="50" Width="300" Height="20"
+                         Text="Web Only — Management console connecting to an existing server" />
+          </RadioButtonGroup>
+        </Control>
+
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="Back" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Text="Next" Default="yes" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Text="Cancel" Cancel="yes" />
+      </Dialog>
+
+      <!-- Cosmos DB connection string dialog -->
+      <Dialog Id="CosmosDbDlg" Width="370" Height="270" Title="Database Configuration">
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15"
+                 Text="{\WixUI_Font_Title}Database Configuration" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15"
+                 Text="Enter your Cosmos DB connection string." />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+
+        <Control Id="ConnStrLabel" Type="Text" X="25" Y="65" Width="300" Height="15"
+                 Text="Cosmos DB Connection String:" />
+        <Control Id="ConnStrEdit" Type="Edit" X="25" Y="82" Width="320" Height="18"
+                 Property="COSMOS_CONNECTION_STRING" />
+
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="Back" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Text="Next" Default="yes" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Text="Cancel" Cancel="yes" />
+      </Dialog>
+
+      <!-- Domain name / source DC dialog -->
+      <Dialog Id="DomainConfigDlg" Width="370" Height="270" Title="Domain Configuration">
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15"
+                 Text="{\WixUI_Font_Title}Domain Configuration" />
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="280" Height="15"
+                 Text="Configure the domain for this installation." />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+
+        <Control Id="DomainLabel" Type="Text" X="25" Y="65" Width="300" Height="15"
+                 Text="Domain Name (for new installation):" />
+        <Control Id="DomainEdit" Type="Edit" X="25" Y="82" Width="320" Height="18"
+                 Property="DOMAIN_NAME" />
+
+        <Control Id="SourceDcLabel" Type="Text" X="25" Y="115" Width="300" Height="15"
+                 Text="Source DC URL (for replica / joining existing domain):" />
+        <Control Id="SourceDcEdit" Type="Edit" X="25" Y="132" Width="320" Height="18"
+                 Property="SOURCE_DC_URL" />
+
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17" Text="Back" />
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17" Text="Next" Default="yes" />
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17" Text="Cancel" Cancel="yes" />
+      </Dialog>
+
+      <!-- Wire custom dialog sequence -->
+      <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="InstallTypeDlg" Order="2">
+        LicenseAccepted = "1"
+      </Publish>
+      <Publish Dialog="InstallTypeDlg" Control="Next" Event="NewDialog" Value="CosmosDbDlg" Order="1">
+        1
+      </Publish>
+      <Publish Dialog="InstallTypeDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg" Order="1">
+        1
+      </Publish>
+      <Publish Dialog="CosmosDbDlg" Control="Next" Event="NewDialog" Value="DomainConfigDlg" Order="1">
+        1
+      </Publish>
+      <Publish Dialog="CosmosDbDlg" Control="Back" Event="NewDialog" Value="InstallTypeDlg" Order="1">
+        1
+      </Publish>
+      <Publish Dialog="DomainConfigDlg" Control="Next" Event="NewDialog" Value="InstallDirDlg" Order="1">
+        1
+      </Publish>
+      <Publish Dialog="DomainConfigDlg" Control="Back" Event="NewDialog" Value="CosmosDbDlg" Order="1">
+        1
+      </Publish>
+    </UI>
+
+  </Package>
+</Wix>

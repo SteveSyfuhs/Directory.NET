@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <?include Variables.wxi ?>
+
+  <!-- ── Directory Server Windows Service ──────────────────────────── -->
+
+  <Fragment>
+    <ComponentGroup Id="ServerServiceComponents" Directory="SERVERDIR">
+      <Component Id="DirectoryServerService" Guid="$(var.ServerServiceGuid)">
+        <File Id="ServerServiceExe"
+              Source="!(bindpath.ServerPublish)\Directory.Server.exe"
+              KeyPath="yes" />
+
+        <ServiceInstall Id="DirectoryServerServiceInstall"
+                        Name="DirectoryServer"
+                        DisplayName="Directory.NET Server"
+                        Description="Active Directory-compatible directory server providing LDAP, Kerberos, and DNS services."
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Account="LocalSystem">
+          <!-- Failure actions: restart on first, second, and third failures -->
+          <ServiceConfig DelayedAutoStart="yes"
+                         OnInstall="yes"
+                         OnReinstall="yes" />
+        </ServiceInstall>
+
+        <ServiceControl Id="DirectoryServerServiceControl"
+                        Name="DirectoryServer"
+                        Start="install"
+                        Stop="both"
+                        Remove="uninstall"
+                        Wait="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+  <!-- ── Web Management Console Windows Service ────────────────────── -->
+
+  <Fragment>
+    <ComponentGroup Id="WebServiceComponents" Directory="WEBDIR">
+      <Component Id="DirectoryWebService" Guid="$(var.WebServiceGuid)">
+        <File Id="WebServiceExe"
+              Source="!(bindpath.WebPublish)\Directory.Web.exe"
+              KeyPath="yes" />
+
+        <ServiceInstall Id="DirectoryWebServiceInstall"
+                        Name="DirectoryWeb"
+                        DisplayName="Directory.NET Web Console"
+                        Description="Web-based administration console for Directory.NET."
+                        Type="ownProcess"
+                        Start="auto"
+                        ErrorControl="normal"
+                        Account="LocalSystem">
+          <ServiceConfig DelayedAutoStart="yes"
+                         OnInstall="yes"
+                         OnReinstall="yes" />
+        </ServiceInstall>
+
+        <ServiceControl Id="DirectoryWebServiceControl"
+                        Name="DirectoryWeb"
+                        Start="install"
+                        Stop="both"
+                        Remove="uninstall"
+                        Wait="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+
+</Wix>
