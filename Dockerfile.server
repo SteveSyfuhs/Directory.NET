@@ -1,7 +1,8 @@
-FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Copy project files and restore
+# Copy Directory.build.props (defines TargetFramework) and project files, then restore
+COPY Directory.build.props ./
 COPY src/Directory.Core/*.csproj src/Directory.Core/
 COPY src/Directory.Schema/*.csproj src/Directory.Schema/
 COPY src/Directory.Security/*.csproj src/Directory.Security/
@@ -18,7 +19,7 @@ RUN dotnet restore src/Directory.Server/Directory.Server.csproj
 COPY src/ src/
 RUN dotnet publish src/Directory.Server/Directory.Server.csproj -c Release -o /app
 
-FROM mcr.microsoft.com/dotnet/runtime:9.0
+FROM mcr.microsoft.com/dotnet/runtime:10.0
 WORKDIR /app
 COPY --from=build /app .
 
