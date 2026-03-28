@@ -96,8 +96,9 @@ public class PasswordService : IPasswordPolicy
     }
 
     /// <summary>
-    /// Compute NT hash using Kerberos.NET's RC4-HMAC key derivation,
-    /// which produces the MD4(UTF-16LE(password)) NT hash.
+    /// Compute NT hash: MD4(UTF-16LE(password)).
+    /// Uses a managed MD4 implementation for cross-platform compatibility,
+    /// since Kerberos.NET's LinuxCryptoPal does not support MD4.
     /// </summary>
     public byte[] ComputeNTHash(string password)
     {
@@ -108,12 +109,7 @@ public class PasswordService : IPasswordPolicy
             return Convert.FromHexString("31D6CFE0D16AE931B73C59D7E0C089C0");
         }
 
-        var key = new KerberosKey(
-            password,
-            principalName: new PrincipalName(PrincipalNameType.NT_PRINCIPAL, "", new[] { "user" }),
-            etype: EncryptionType.RC4_HMAC_NT);
-
-        return key.GetKey().ToArray();
+        return Md4.ComputeNTHash(password);
     }
 
     /// <summary>
@@ -133,12 +129,24 @@ public class PasswordService : IPasswordPolicy
 
         return etypes.Select(etype =>
         {
-            var key = new KerberosKey(password, principalName: principal, etype: etype);
+            byte[] keyBytes;
+
+            if (etype == EncryptionType.RC4_HMAC_NT)
+            {
+                // RC4-HMAC key is just the NT hash (MD4 of UTF-16LE password).
+                // Use managed MD4 directly to avoid PlatformNotSupportedException on Linux.
+                keyBytes = Md4.ComputeNTHash(password);
+            }
+            else
+            {
+                var key = new KerberosKey(password, principalName: principal, etype: etype);
+                keyBytes = key.GetKey().ToArray();
+            }
 
             return new KerberosKeyData
             {
                 EncryptionType = (int)etype,
-                KeyValue = key.GetKey().ToArray(),
+                KeyValue = keyBytes,
                 EncryptionTypeName = etype.ToString(),
             };
         }).ToList();
