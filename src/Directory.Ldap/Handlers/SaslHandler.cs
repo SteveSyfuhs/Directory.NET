@@ -1,10 +1,7 @@
 using System.Formats.Asn1;
-using System.Security.Cryptography;
 using Directory.Core.Interfaces;
 using Directory.Ldap.Protocol;
 using Directory.Ldap.Server;
-using Directory.Security.Apds;
-using ApdsNtStatus = Directory.Security.Apds.NtStatus;
 using Kerberos.NET;
 using Kerberos.NET.Crypto;
 using Kerberos.NET.Entities;
@@ -18,7 +15,6 @@ public class SaslHandler
     private readonly IPasswordPolicy _passwordPolicy;
     private readonly ILogger<SaslHandler> _logger;
     private readonly KerberosValidator _kerberosValidator;
-    private readonly ApdsLogonProcessor _apdsProcessor;
 
     public SaslHandler(IDirectoryStore store, IPasswordPolicy passwordPolicy, ILogger<SaslHandler> logger)
     {
@@ -31,12 +27,6 @@ public class SaslHandler
         : this(store, passwordPolicy, logger)
     {
         _kerberosValidator = kerberosValidator;
-    }
-
-    public SaslHandler(IDirectoryStore store, IPasswordPolicy passwordPolicy, ILogger<SaslHandler> logger, KerberosValidator kerberosValidator, ApdsLogonProcessor apdsProcessor)
-        : this(store, passwordPolicy, logger, kerberosValidator)
-    {
-        _apdsProcessor = apdsProcessor;
     }
 
     // GSSAPI (Kerberos) SASL bind
@@ -77,7 +67,6 @@ public class SaslHandler
         try
         {
             // SPNEGO tokens start with APPLICATION[0] containing an OID
-            // We support two mechanisms: Kerberos and NTLM
             var mechToken = ExtractMechToken(token);
 
             if (mechToken == null || mechToken.Length == 0)
@@ -85,10 +74,11 @@ public class SaslHandler
                 return SaslBindResult.Failure("Empty SPNEGO mechanism token");
             }
 
-            // Check if this is an NTLM token (starts with "NTLMSSP\0")
+            // Check if this is an NTLM token (no longer supported)
             if (IsNtlmToken(mechToken))
             {
-                return await HandleNtlmSpnegoAsync(mechToken, state, ct);
+                _logger.LogWarning("NTLM authentication is not supported; use Kerberos GSSAPI instead");
+                return SaslBindResult.Failure("NTLM authentication is not supported. Use Kerberos.");
             }
 
             // Otherwise, try Kerberos
@@ -99,105 +89,6 @@ public class SaslHandler
             _logger.LogWarning(ex, "SPNEGO authentication failed");
             return SaslBindResult.Failure("SPNEGO authentication failed: " + ex.Message);
         }
-    }
-
-    // NTLM authentication within SPNEGO
-    private async Task<SaslBindResult> HandleNtlmSpnegoAsync(byte[] ntlmToken, LdapConnectionState state, CancellationToken ct)
-    {
-        if (ntlmToken.Length < 12)
-            return SaslBindResult.Failure("Invalid NTLM token");
-
-        // Read NTLM message type (offset 8, 4 bytes LE)
-        var messageType = BitConverter.ToInt32(ntlmToken, 8);
-
-        switch (messageType)
-        {
-            case 1: // NEGOTIATE_MESSAGE
-                return HandleNtlmNegotiate(ntlmToken, state);
-            case 3: // AUTHENTICATE_MESSAGE
-                return await HandleNtlmAuthenticateAsync(ntlmToken, state, ct);
-            default:
-                return SaslBindResult.Failure($"Unsupported NTLM message type: {messageType}");
-        }
-    }
-
-    private SaslBindResult HandleNtlmNegotiate(byte[] token, LdapConnectionState state)
-    {
-        // Generate CHALLENGE_MESSAGE (type 2)
-        var serverChallenge = RandomNumberGenerator.GetBytes(8);
-        state.NtlmChallenge = serverChallenge;
-
-        var challengeMsg = BuildNtlmChallenge(serverChallenge);
-
-        // Wrap in SPNEGO response token
-        var spnegoResponse = WrapSpnegoResponse(challengeMsg, isAcceptIncomplete: true);
-
-        return SaslBindResult.ContinueNeeded(spnegoResponse);
-    }
-
-    private async Task<SaslBindResult> HandleNtlmAuthenticateAsync(byte[] token, LdapConnectionState state, CancellationToken ct)
-    {
-        if (state.NtlmChallenge == null)
-            return SaslBindResult.Failure("No NTLM challenge in progress");
-
-        // Parse AUTHENTICATE_MESSAGE fields
-        var (domain, username, ntResponse, lmResponse) = ParseNtlmAuthenticate(token);
-
-        if (string.IsNullOrEmpty(username))
-            return SaslBindResult.Failure("Empty username in NTLM authenticate");
-
-        _logger.LogDebug("NTLM authenticate: {Domain}\\{User}", domain, username);
-
-        // Route through APDS for full account restriction checking when available
-        if (_apdsProcessor is not null)
-        {
-            var logonResult = await _apdsProcessor.ProcessNetworkLogonAsync(
-                state.TenantId, domain, username, ntResponse, lmResponse, state.NtlmChallenge, ct);
-
-            state.NtlmChallenge = null; // Clear challenge
-
-            if (logonResult.Status == ApdsNtStatus.StatusSuccess && logonResult.User is not null)
-            {
-                state.BindStatus = BindState.SaslBound;
-                state.BoundDn = logonResult.User.DistinguishedName;
-                state.BoundSid = logonResult.User.ObjectSid;
-
-                var spnegoResponse = WrapSpnegoResponse([], isAcceptIncomplete: false);
-                return SaslBindResult.Success(logonResult.User.DistinguishedName, spnegoResponse);
-            }
-
-            return SaslBindResult.Failure($"NTLM authentication failed: {logonResult.Status}");
-        }
-
-        // Fallback: inline NTLMv2 validation when APDS is not injected
-        var user = await _store.GetBySamAccountNameAsync(state.TenantId, state.DomainDn, username, ct);
-        if (user == null)
-        {
-            // Try UPN
-            var upn = $"{username}@{domain}";
-            user = await _store.GetByUpnAsync(state.TenantId, upn, ct);
-        }
-
-        if (user == null || string.IsNullOrEmpty(user.NTHash))
-            return SaslBindResult.Failure("User not found or no credentials");
-
-        // Validate NTLMv2 response
-        var ntHash = Convert.FromHexString(user.NTHash);
-        var isValid = ValidateNtlmv2Response(ntHash, username, domain, state.NtlmChallenge, ntResponse);
-
-        state.NtlmChallenge = null; // Clear challenge
-
-        if (isValid)
-        {
-            state.BindStatus = BindState.SaslBound;
-            state.BoundDn = user.DistinguishedName;
-            state.BoundSid = user.ObjectSid;
-
-            var spnegoResponse = WrapSpnegoResponse([], isAcceptIncomplete: false);
-            return SaslBindResult.Success(user.DistinguishedName, spnegoResponse);
-        }
-
-        return SaslBindResult.Failure("NTLM authentication failed");
     }
 
     private async Task<SaslBindResult> ValidateKerberosTokenAsync(byte[] token, LdapConnectionState state, CancellationToken ct)
@@ -447,32 +338,6 @@ public class SaslHandler
         return null;
     }
 
-    private static byte[] BuildNtlmChallenge(byte[] serverChallenge)
-    {
-        // Build minimal NTLM CHALLENGE_MESSAGE (type 2)
-        using var ms = new MemoryStream();
-        using var bw = new BinaryWriter(ms);
-
-        bw.Write("NTLMSSP\0"u8); // Signature
-        bw.Write(2); // Message type
-
-        // Target name (empty)
-        bw.Write((short)0); // TargetNameLen
-        bw.Write((short)0); // TargetNameMaxLen
-        bw.Write(32); // TargetNameOffset
-
-        // Negotiate flags
-        bw.Write(0x00028233); // NTLMSSP_NEGOTIATE_UNICODE | NTLMSSP_NEGOTIATE_NTLM | NTLMSSP_NEGOTIATE_TARGET_INFO | NTLMSSP_NEGOTIATE_56 | NTLMSSP_NEGOTIATE_128
-
-        // Server challenge
-        bw.Write(serverChallenge);
-
-        // Reserved
-        bw.Write(0L);
-
-        return ms.ToArray();
-    }
-
     private enum NegState
     {
         AcceptCompleted = 0,
@@ -542,58 +407,6 @@ public class SaslHandler
         return wrapper.Encode();
     }
 
-    private static bool ValidateNtlmv2Response(byte[] ntHash, string username, string domain, byte[] serverChallenge, byte[] ntResponse)
-    {
-        if (ntResponse.Length < 24) return false;
-
-        // NTLMv2: responseKey = HMAC-MD5(ntHash, UPPERCASE(username) + domain)
-        var identity = System.Text.Encoding.Unicode.GetBytes(username.ToUpperInvariant() + domain);
-        byte[] ntlmv2Hash;
-        using (var hmac = new System.Security.Cryptography.HMACMD5(ntHash))
-            ntlmv2Hash = hmac.ComputeHash(identity);
-
-        // Expected: HMAC-MD5(ntlmv2Hash, serverChallenge + clientBlob)
-        var clientBlob = ntResponse[16..];
-        var challengePlusBlob = new byte[serverChallenge.Length + clientBlob.Length];
-        serverChallenge.CopyTo(challengePlusBlob, 0);
-        clientBlob.CopyTo(challengePlusBlob, serverChallenge.Length);
-
-        byte[] expectedNtProof;
-        using (var hmac = new System.Security.Cryptography.HMACMD5(ntlmv2Hash))
-            expectedNtProof = hmac.ComputeHash(challengePlusBlob);
-
-        return CryptographicOperations.FixedTimeEquals(expectedNtProof, ntResponse[..16]);
-    }
-
-    private static (string domain, string username, byte[] ntResponse, byte[] lmResponse) ParseNtlmAuthenticate(byte[] token)
-    {
-        // Parse NTLM AUTHENTICATE_MESSAGE (type 3)
-        if (token.Length < 88) return ("", "", [], []);
-
-        // LM Response: offset at 12 (len, maxlen, offset)
-        var lmLen = BitConverter.ToUInt16(token, 12);
-        var lmOffset = BitConverter.ToInt32(token, 16);
-        var lmResponse = lmLen > 0 && lmOffset + lmLen <= token.Length ? token[lmOffset..(lmOffset + lmLen)] : [];
-
-        // NT Response: offset at 20
-        var ntLen = BitConverter.ToUInt16(token, 20);
-        var ntOffset = BitConverter.ToInt32(token, 24);
-        var ntResponse = ntLen > 0 && ntOffset + ntLen <= token.Length ? token[ntOffset..(ntOffset + ntLen)] : [];
-
-        // Domain: offset at 28
-        var domainLen = BitConverter.ToUInt16(token, 28);
-        var domainOffset = BitConverter.ToInt32(token, 32);
-        var domain = domainLen > 0 && domainOffset + domainLen <= token.Length
-            ? System.Text.Encoding.Unicode.GetString(token, domainOffset, domainLen) : "";
-
-        // User: offset at 36
-        var userLen = BitConverter.ToUInt16(token, 36);
-        var userOffset = BitConverter.ToInt32(token, 40);
-        var username = userLen > 0 && userOffset + userLen <= token.Length
-            ? System.Text.Encoding.Unicode.GetString(token, userOffset, userLen) : "";
-
-        return (domain, username, ntResponse, lmResponse);
-    }
 }
 
 public class SaslBindResult

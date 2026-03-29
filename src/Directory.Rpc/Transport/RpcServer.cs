@@ -1,8 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
 using Directory.Rpc.Dispatch;
-using Directory.Security;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -145,14 +143,11 @@ public class RpcServer : IHostedService, IDisposable
         {
             socket.NoDelay = true;
 
-            var ntlmAuth = _services.GetRequiredService<NtlmAuthenticator>();
-
             var handler = new RpcConnectionHandler(
                 socket,
                 _dispatcher,
                 _options,
-                _logger,
-                ntlmAuth);
+                _logger);
 
             await handler.ProcessAsync(ct);
         }

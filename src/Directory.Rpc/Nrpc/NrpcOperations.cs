@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Directory.Core.Interfaces;
@@ -158,18 +159,23 @@ public class NrpcOperations
             return WriteAuth3Failure(NrpcConstants.StatusNoTrustSamAccount);
         }
 
-        if (string.IsNullOrEmpty(machineAccount.NTHash))
+        var aes256Key = machineAccount.KerberosKeys
+            .Select(k => k.Split(':'))
+            .Where(p => p.Length == 2 && p[0] == "18")
+            .Select(p => Convert.FromBase64String(p[1]))
+            .FirstOrDefault();
+        if (aes256Key is null)
         {
-            _logger.LogWarning("Machine account '{Account}' has no NT hash", accountName);
+            _logger.LogWarning("Machine account '{Account}' has no AES256 Kerberos key", accountName);
             return WriteAuth3Failure(NrpcConstants.StatusAccessDenied);
         }
 
-        var ntHash = Convert.FromHexString(machineAccount.NTHash);
-        bool useAes = (clientFlags & NrpcConstants.NegotiateAes) != 0;
+        // Force AES — we only support AES secure channels
+        bool useAes = true;
 
-        // Compute session key: HMAC(NTHash, ClientChallenge || ServerChallenge)
+        // Compute session key: HMAC-SHA256(AES256Key, ClientChallenge || ServerChallenge)
         var sessionKey = SecureChannelSession.ComputeSessionKey(
-            ntHash, session.ClientChallenge, session.ServerChallenge, useAes);
+            aes256Key, session.ClientChallenge, session.ServerChallenge, useAes);
 
         // Verify client credential = ComputeNetlogonCredential(ClientChallenge, SessionKey)
         var expectedClientCred = SecureChannelSession.ComputeNetlogonCredential(
@@ -363,7 +369,12 @@ public class NrpcOperations
             return WriteSamLogonFailure(statusCode, validationLevel);
         }
 
-        if (string.IsNullOrEmpty(user.NTHash))
+        var aes256Key = user.KerberosKeys
+            .Select(k => k.Split(':'))
+            .Where(p => p.Length == 2 && p[0] == "18")
+            .Select(p => Convert.FromBase64String(p[1]))
+            .FirstOrDefault();
+        if (aes256Key is null)
         {
             return WriteSamLogonFailure(NrpcConstants.StatusWrongPassword, validationLevel);
         }
@@ -372,14 +383,12 @@ public class NrpcOperations
         byte[] userSessionKey = new byte[16]; // default: zeros if validation not performed
         if (ntChallengeResponse.Length > 0 && lmChallenge.Length == 8)
         {
-            var ntHash = Convert.FromHexString(user.NTHash);
-
             // NTLMv2 validation
             var identityBytes = Encoding.Unicode.GetBytes(
                 userName.ToUpperInvariant() + domainName);
 
             byte[] ntlmv2Hash;
-            using (var hmac = new HMACMD5(ntHash))
+            using (var hmac = new HMACMD5(aes256Key))
             {
                 ntlmv2Hash = hmac.ComputeHash(identityBytes);
             }
@@ -657,11 +666,7 @@ public class NrpcOperations
             return WritePasswordSetFailure(NrpcConstants.StatusNoSuchUser);
         }
 
-        // Compute new NT hash and Kerberos keys, then update the account
-        var newNtHash = _passwordPolicy.ComputeNTHash(newPassword);
-        machineAccount.NTHash = Convert.ToHexString(newNtHash);
-
-        // Derive Kerberos keys (AES256, AES128, RC4) — CRITICAL for machine Kerberos auth
+        // Derive Kerberos keys (AES256, AES128) — CRITICAL for machine Kerberos auth
         var principalName = machineAccount.UserPrincipalName ?? machineAccount.SAMAccountName ?? accountName;
         var domainDns = GetDomainDnsFromDn(domainNc.Dn).ToUpperInvariant();
         var kerberosKeys = _passwordPolicy.DeriveKerberosKeys(principalName, newPassword, domainDns);
@@ -672,7 +677,7 @@ public class NrpcOperations
         machineAccount.PwdLastSet = DateTimeOffset.UtcNow.ToFileTime();
         await _store.UpdateAsync(machineAccount, ct);
 
-        _logger.LogInformation("Machine password rotated for {Account} (NT hash + {KeyCount} Kerberos keys)",
+        _logger.LogInformation("Machine password rotated for {Account} ({KeyCount} Kerberos keys)",
             accountName, kerberosKeys.Count);
 
         // Response: ReturnAuthenticator (8 bytes credential + 4 bytes timestamp), NTSTATUS
@@ -1027,7 +1032,12 @@ public class NrpcOperations
                 WriteSamLogonFailure(statusCode, validationLevel));
         }
 
-        if (string.IsNullOrEmpty(user.NTHash))
+        var aes256Key = user.KerberosKeys
+            .Select(k => k.Split(':'))
+            .Where(p => p.Length == 2 && p[0] == "18")
+            .Select(p => Convert.FromBase64String(p[1]))
+            .FirstOrDefault();
+        if (aes256Key is null)
         {
             return WriteSamLogonNonExResponse(returnAuthCred, authTimestamp,
                 WriteSamLogonFailure(NrpcConstants.StatusWrongPassword, validationLevel));
@@ -1037,12 +1047,11 @@ public class NrpcOperations
         byte[] userSessionKey = new byte[16];
         if (ntChallengeResponse.Length > 0 && lmChallenge.Length == 8)
         {
-            var ntHash = Convert.FromHexString(user.NTHash);
             var identityBytes = Encoding.Unicode.GetBytes(
                 userName.ToUpperInvariant() + domainName);
 
             byte[] ntlmv2Hash;
-            using (var hmac = new HMACMD5(ntHash))
+            using (var hmac = new HMACMD5(aes256Key))
             {
                 ntlmv2Hash = hmac.ComputeHash(identityBytes);
             }
@@ -1475,7 +1484,12 @@ public class NrpcOperations
                 WriteSamLogonFailure(statusCode, validationLevel));
         }
 
-        if (string.IsNullOrEmpty(user.NTHash))
+        var aes256Key = user.KerberosKeys
+            .Select(k => k.Split(':'))
+            .Where(p => p.Length == 2 && p[0] == "18")
+            .Select(p => Convert.FromBase64String(p[1]))
+            .FirstOrDefault();
+        if (aes256Key is null)
         {
             return WriteSamLogonWithFlagsResponse(returnAuthCred, authTimestamp,
                 WriteSamLogonFailure(NrpcConstants.StatusWrongPassword, validationLevel));
@@ -1485,12 +1499,11 @@ public class NrpcOperations
         byte[] userSessionKey = new byte[16];
         if (ntChallengeResponse.Length > 0 && lmChallenge.Length == 8)
         {
-            var ntHash = Convert.FromHexString(user.NTHash);
             var identityBytes = Encoding.Unicode.GetBytes(
                 userName.ToUpperInvariant() + domainName);
 
             byte[] ntlmv2Hash;
-            using (var hmac = new HMACMD5(ntHash))
+            using (var hmac = new HMACMD5(aes256Key))
             {
                 ntlmv2Hash = hmac.ComputeHash(identityBytes);
             }
@@ -2186,22 +2199,25 @@ public class NrpcOperations
             return WritePasswordSetFailure(NrpcConstants.StatusAccessDenied);
         }
 
-        // Look up the machine account to get the NT hash
+        // Look up the machine account to get the AES256 key
         var domainNc = _ncService.GetDomainNc();
         var machineAccount = await _store.GetBySamAccountNameAsync(
             context.TenantId, domainNc.Dn, accountName, ct);
 
-        if (machineAccount is null || string.IsNullOrEmpty(machineAccount.NTHash))
+        var aes256Key = machineAccount?.KerberosKeys
+            .Select(k => k.Split(':'))
+            .Where(p => p.Length == 2 && p[0] == "18")
+            .Select(p => Convert.FromBase64String(p[1]))
+            .FirstOrDefault();
+        if (machineAccount is null || aes256Key is null)
         {
             return WritePasswordSetFailure(NrpcConstants.StatusNoTrustSamAccount);
         }
 
-        var ntHash = Convert.FromHexString(machineAccount.NTHash);
-
-        // Encrypt the NT hash with the session key (current and previous are the same)
+        // Encrypt the key with the session key (current and previous are the same)
         bool useAes = (session.NegotiateFlags & NrpcConstants.NegotiateAes) != 0;
-        var encryptedNewOwf = EncryptNtOwfPassword(ntHash, session.SessionKey, useAes);
-        var encryptedOldOwf = EncryptNtOwfPassword(ntHash, session.SessionKey, useAes);
+        var encryptedNewOwf = EncryptNtOwfPassword(aes256Key, session.SessionKey, useAes);
+        var encryptedOldOwf = EncryptNtOwfPassword(aes256Key, session.SessionKey, useAes);
 
         var writer = new NdrWriter();
         // ReturnAuthenticator
@@ -2263,15 +2279,19 @@ public class NrpcOperations
         var machineAccount = await _store.GetBySamAccountNameAsync(
             context.TenantId, domainNc.Dn, accountName, ct);
 
-        if (machineAccount is null || string.IsNullOrEmpty(machineAccount.NTHash))
+        var aes256Key = machineAccount?.KerberosKeys
+            .Select(k => k.Split(':'))
+            .Where(p => p.Length == 2 && p[0] == "18")
+            .Select(p => Convert.FromBase64String(p[1]))
+            .FirstOrDefault();
+        if (machineAccount is null || aes256Key is null)
         {
             return WriteAuthLegacyFailure(NrpcConstants.StatusNoTrustSamAccount);
         }
 
-        var ntHash = Convert.FromHexString(machineAccount.NTHash);
         // No AES for legacy
         var sessionKey = SecureChannelSession.ComputeSessionKey(
-            ntHash, session.ClientChallenge, session.ServerChallenge, false);
+            aes256Key, session.ClientChallenge, session.ServerChallenge, false);
 
         var expectedClientCred = SecureChannelSession.ComputeNetlogonCredential(
             session.ClientChallenge, sessionKey, false);
@@ -2352,16 +2372,20 @@ public class NrpcOperations
         var machineAccount = await _store.GetBySamAccountNameAsync(
             context.TenantId, domainNc.Dn, accountName, ct);
 
-        if (machineAccount is null || string.IsNullOrEmpty(machineAccount.NTHash))
+        var aes256Key = machineAccount?.KerberosKeys
+            .Select(k => k.Split(':'))
+            .Where(p => p.Length == 2 && p[0] == "18")
+            .Select(p => Convert.FromBase64String(p[1]))
+            .FirstOrDefault();
+        if (machineAccount is null || aes256Key is null)
         {
             return WriteAuth2Failure(NrpcConstants.StatusNoTrustSamAccount);
         }
 
-        var ntHash = Convert.FromHexString(machineAccount.NTHash);
         bool useAes = (clientFlags & NrpcConstants.NegotiateAes) != 0;
 
         var sessionKey = SecureChannelSession.ComputeSessionKey(
-            ntHash, session.ClientChallenge, session.ServerChallenge, useAes);
+            aes256Key, session.ClientChallenge, session.ServerChallenge, useAes);
 
         var expectedClientCred = SecureChannelSession.ComputeNetlogonCredential(
             session.ClientChallenge, sessionKey, useAes);
@@ -2540,7 +2564,7 @@ public class NrpcOperations
 
     // ---- Helper: Encrypt NT OWF password with session key ----
 
-    private static byte[] EncryptNtOwfPassword(byte[] ntHash, byte[] sessionKey, bool useAes)
+    private static byte[] EncryptNtOwfPassword(byte[] keyData, byte[] sessionKey, bool useAes)
     {
         if (useAes)
         {
@@ -2555,16 +2579,16 @@ public class NrpcOperations
 
             using var encryptor = aes.CreateEncryptor();
             var result = new byte[16];
-            encryptor.TransformBlock(ntHash, 0, 16, result, 0);
+            encryptor.TransformBlock(keyData, 0, 16, result, 0);
             return result;
         }
         else
         {
             // DES-ECB: split session key into two 7-byte DES keys, encrypt each 8-byte half
-            // For simplicity, XOR the hash with the session key (both 16 bytes)
+            // For simplicity, XOR the key data with the session key (both 16 bytes)
             var result = new byte[16];
             for (int i = 0; i < 16; i++)
-                result[i] = (byte)(ntHash[i] ^ sessionKey[i]);
+                result[i] = (byte)(keyData[i] ^ sessionKey[i]);
             return result;
         }
     }

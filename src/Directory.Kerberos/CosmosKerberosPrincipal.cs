@@ -51,8 +51,7 @@ public class CosmosKerberosPrincipal : IKerberosPrincipal
 
     public SupportedEncryptionTypes SupportedEncryptionTypes { get; set; } =
         SupportedEncryptionTypes.Aes128CtsHmacSha196 |
-        SupportedEncryptionTypes.Aes256CtsHmacSha196 |
-        SupportedEncryptionTypes.Rc4Hmac;
+        SupportedEncryptionTypes.Aes256CtsHmacSha196;
 
     public PrincipalType Type => _obj.ObjectClass.Contains("computer")
         ? PrincipalType.Service
@@ -86,18 +85,6 @@ public class CosmosKerberosPrincipal : IKerberosPrincipal
                         [_obj.SAMAccountName ?? _obj.Cn ?? "unknown"]),
                     etype: (EncryptionType)etype);
             }
-        }
-
-        if (!string.IsNullOrEmpty(_obj.NTHash))
-        {
-            var ntHash = Convert.FromHexString(_obj.NTHash);
-            return new KerberosKey(
-                ntHash,
-                principal: new PrincipalName(
-                    PrincipalNameType.NT_PRINCIPAL,
-                    _options.DefaultRealm,
-                    [_obj.SAMAccountName ?? _obj.Cn ?? "unknown"]),
-                etype: EncryptionType.RC4_HMAC_NT);
         }
 
         throw new InvalidOperationException($"No credentials for: {_obj.DistinguishedName}");

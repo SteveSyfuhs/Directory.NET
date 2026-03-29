@@ -79,15 +79,15 @@ public class DrsuapiClient : IAsyncDisposable
 
     /// <summary>
     /// Connects to a remote DC using EPM to discover the DRSUAPI dynamic port,
-    /// then performs an authenticated RPC bind with NTLM.
+    /// then performs an authenticated RPC bind with Kerberos.
     /// </summary>
     /// <param name="hostname">DNS hostname or IP address of the target DC.</param>
-    /// <param name="username">Username for NTLM authentication.</param>
-    /// <param name="domain">Domain name for NTLM authentication.</param>
-    /// <param name="ntHash">NT hash (MD4 of the Unicode password) for NTLM authentication.</param>
+    /// <param name="username">Username for authentication.</param>
+    /// <param name="domain">Domain name for authentication.</param>
+    /// <param name="password">Password for authentication.</param>
     /// <param name="ct">Cancellation token.</param>
     public async Task ConnectAsync(
-        string hostname, string username, string domain, byte[] ntHash,
+        string hostname, string username, string domain, string password,
         CancellationToken ct = default)
     {
         _logger.LogInformation("DRSUAPI: resolving dynamic port via EPM on {Hostname}:135", hostname);
@@ -105,7 +105,7 @@ public class DrsuapiClient : IAsyncDisposable
         // Step 3: Authenticated bind to the DRSUAPI interface
         await _rpcClient.BindAsync(
             DrsuapiInterfaceId, DrsuapiMajorVersion, DrsuapiMinorVersion,
-            username, domain, ntHash, ct);
+            username, domain, password, ct);
 
         _logger.LogInformation("DRSUAPI: authenticated RPC bind complete on {Hostname}:{Port}", hostname, drsuapiPort);
     }

@@ -87,23 +87,23 @@ public class DrsReplicationClient : IDisposable
 
     /// <summary>
     /// Creates an RPC-based replication client that uses DCE/RPC over TCP (ncacn_ip_tcp)
-    /// with NTLM authentication to connect to a Windows AD DS domain controller.
+    /// with Kerberos authentication to connect to a Windows AD DS domain controller.
     /// The client discovers the DRSUAPI dynamic port via the Endpoint Mapper on port 135,
     /// performs an authenticated RPC bind, and then issues DRSBind to establish a replication handle.
     /// </summary>
     /// <param name="hostname">DNS hostname or IP address of the target DC.</param>
-    /// <param name="username">Username for NTLM authentication (e.g., "Administrator").</param>
-    /// <param name="domain">NetBIOS or DNS domain name for NTLM authentication.</param>
-    /// <param name="ntHash">Pre-computed NT hash (MD4 of UTF-16LE password) for NTLM authentication.</param>
+    /// <param name="username">Username for authentication (e.g., "Administrator").</param>
+    /// <param name="domain">NetBIOS or DNS domain name for authentication.</param>
+    /// <param name="password">Password for authentication.</param>
     /// <param name="logger">Logger instance for diagnostics.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>A bound <see cref="DrsRpcReplicationClient"/> ready for replication operations.</returns>
     public static async Task<DrsRpcReplicationClient> CreateRpcClientAsync(
-        string hostname, string username, string domain, byte[] ntHash,
+        string hostname, string username, string domain, string password,
         ILogger logger, CancellationToken ct = default)
     {
         var drsuapi = new DrsuapiClient(logger);
-        await drsuapi.ConnectAsync(hostname, username, domain, ntHash, ct);
+        await drsuapi.ConnectAsync(hostname, username, domain, password, ct);
 
         var clientDsaGuid = Guid.NewGuid();
         await drsuapi.DrsBindAsync(clientDsaGuid, ct);

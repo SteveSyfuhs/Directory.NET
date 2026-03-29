@@ -21,11 +21,6 @@ public interface IPasswordPolicy
     bool MeetsComplexityRequirements(string password, string samAccountName = null);
 
     /// <summary>
-    /// Compute the NT hash (MD4 of UTF-16LE) of a password.
-    /// </summary>
-    byte[] ComputeNTHash(string password);
-
-    /// <summary>
     /// Derive Kerberos long-term credential keys from a password.
     /// </summary>
     List<KerberosKeyData> DeriveKerberosKeys(string principalName, string password, string realm);

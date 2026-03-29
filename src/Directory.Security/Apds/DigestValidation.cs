@@ -122,21 +122,11 @@ public class DigestValidation
         // In practice the DC would have these pre-computed at password set time
         if (storedHashes is null || storedHashes.Length == 0)
         {
-            // Fall back to recomputing HA1 from the NT hash if possible
-            if (string.IsNullOrEmpty(user.NTHash))
-            {
-                return new DigestValidationResult
-                {
-                    IsValid = false,
-                    Status = NtStatus.StatusLogonFailure,
-                };
-            }
-
-            // Try the primary hash: MD5(username:realm:password)
-            // Since we don't have the cleartext password, we can't do this.
-            // Instead, try all 29 WDigest hash variations using the stored NT hash.
-            // This is a simplified path; full WDigest requires the hashes to be pre-stored.
-            _logger.LogDebug("No stored WDigest hashes for {User}, Digest auth unavailable", username);
+            // Digest authentication requires pre-stored WDigest hashes.
+            // NT hash-based fallback has been removed in favour of Kerberos authentication.
+            _logger.LogWarning(
+                "No stored WDigest hashes for {User}; Digest authentication is deprecated in favour of Kerberos",
+                username);
             return new DigestValidationResult
             {
                 IsValid = false,

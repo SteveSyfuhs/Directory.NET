@@ -127,9 +127,10 @@ public class GmsaService
         }, JsonOpts);
         obj.SetAttribute("gmsaMetadata", new DirectoryAttribute("gmsaMetadata", metadataJson));
 
-        // Generate and store initial password hash
+        // Generate and store initial password as Kerberos keys
         var password = await DerivePasswordAsync(objectSid, now, ct);
-        obj.NTHash = Convert.ToHexString(password);
+        obj.KerberosKeys = new List<string> { $"18:{Convert.ToBase64String(password[..32])}" };
+        obj.NTHash = null;
         obj.PwdLastSet = now.ToFileTime();
 
         await _store.CreateAsync(obj, ct);
@@ -240,9 +241,10 @@ public class GmsaService
     {
         var now = DateTimeOffset.UtcNow;
 
-        // Derive new password based on current time
+        // Derive new password based on current time and store as Kerberos keys
         var newPassword = await DerivePasswordAsync(obj.ObjectSid, now, ct);
-        obj.NTHash = Convert.ToHexString(newPassword);
+        obj.KerberosKeys = new List<string> { $"18:{Convert.ToBase64String(newPassword[..32])}" };
+        obj.NTHash = null;
         obj.PwdLastSet = now.ToFileTime();
 
         // Update metadata

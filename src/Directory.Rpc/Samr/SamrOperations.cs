@@ -1229,8 +1229,8 @@ public class SamrOperations
 
         // LmPasswordPresent
         writer.WriteByte(0);
-        // NtPasswordPresent
-        writer.WriteByte(user.NTHash != null ? (byte)1 : (byte)0);
+        // NtPasswordPresent — check KerberosKeys as credential presence indicator
+        writer.WriteByte(user.KerberosKeys != null && user.KerberosKeys.Count > 0 ? (byte)1 : (byte)0);
         // PasswordExpired
         writer.WriteByte(user.PwdLastSet == 0 ? (byte)1 : (byte)0);
         // PrivateDataSensitive

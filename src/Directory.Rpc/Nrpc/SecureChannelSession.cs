@@ -30,7 +30,7 @@ public class SecureChannelSession
     /// <summary>
     /// Computes the Netlogon session key per MS-NRPC 3.1.4.3.1.
     /// </summary>
-    /// <param name="sharedSecret">The NT hash of the machine account password.</param>
+    /// <param name="sharedSecret">The machine account's AES key material (derived from Kerberos key derivation).</param>
     /// <param name="clientChallenge">8-byte client challenge from NetrServerReqChallenge.</param>
     /// <param name="serverChallenge">8-byte server challenge from NetrServerReqChallenge.</param>
     /// <param name="useAes">True if AES negotiation flag is set.</param>
@@ -53,9 +53,7 @@ public class SecureChannelSession
         }
         else
         {
-            // Non-AES: HMAC-MD5(sharedSecret, clientChallenge || serverChallenge)
-            using var hmac = new HMACMD5(sharedSecret);
-            return hmac.ComputeHash(challengeData);
+            throw new NotSupportedException("Only AES secure channels are supported");
         }
     }
 
@@ -87,25 +85,7 @@ public class SecureChannelSession
         }
         else
         {
-            // DES-ECB based computation (MS-NRPC 3.1.4.4.1):
-            // Split session key into two 7-byte DES keys, encrypt each half of input
-            var desKey1 = DeriveDesKey(sessionKey, 0);
-            var desKey2 = DeriveDesKey(sessionKey, 7);
-
-            var output = new byte[8];
-
-            // First DES: encrypt input[0..7] with key1, XOR result into input, encrypt with key2
-            var temp = DesEcbEncrypt(desKey1, input);
-            for (int i = 0; i < 8; i++)
-                temp[i] ^= 0; // first pass, no XOR needed
-
-            // Actually: Cred = DES(k2, DES(k1, input))
-            // Per MS-NRPC: output = DES_ECB(k1, input) then output = DES_ECB(k2, output)
-            var pass1 = DesEcbEncrypt(desKey1, input);
-            var pass2 = DesEcbEncrypt(desKey2, pass1);
-            Buffer.BlockCopy(pass2, 0, output, 0, 8);
-
-            return output;
+            throw new NotSupportedException("Only AES secure channels are supported");
         }
     }
 
@@ -185,8 +165,7 @@ public class SecureChannelSession
         }
         else
         {
-            // RC4 decrypt with session key
-            decrypted = Rc4Transform(SessionKey, encryptedBuffer);
+            throw new NotSupportedException("Only AES secure channels are supported");
         }
 
         // Last 4 bytes = password length in bytes (little-endian)
@@ -197,84 +176,5 @@ public class SecureChannelSession
         // Password is stored at the end of the 512-byte buffer, right-justified
         int offset = 512 - passwordLength;
         return System.Text.Encoding.Unicode.GetString(decrypted, offset, passwordLength);
-    }
-
-    // ---- Private helpers ----
-
-    /// <summary>
-    /// Derives an 8-byte DES key from 7 bytes of key material per the MS-NRPC spec.
-    /// </summary>
-    private static byte[] DeriveDesKey(byte[] input, int offset)
-    {
-        var key = new byte[8];
-        key[0] = (byte)(input[offset + 0] >> 1);
-        key[1] = (byte)(((input[offset + 0] & 0x01) << 6) | (input[offset + 1] >> 2));
-        key[2] = (byte)(((input[offset + 1] & 0x03) << 5) | (input[offset + 2] >> 3));
-        key[3] = (byte)(((input[offset + 2] & 0x07) << 4) | (input[offset + 3] >> 4));
-        key[4] = (byte)(((input[offset + 3] & 0x0F) << 3) | (input[offset + 4] >> 5));
-        key[5] = (byte)(((input[offset + 4] & 0x1F) << 2) | (input[offset + 5] >> 6));
-        key[6] = (byte)(((input[offset + 5] & 0x3F) << 1) | (input[offset + 6] >> 7));
-        key[7] = (byte)(input[offset + 6] & 0x7F);
-
-        // Set parity bits
-        for (int i = 0; i < 8; i++)
-        {
-            key[i] = (byte)((key[i] << 1) & 0xFE);
-            // Add odd parity
-            int parity = 0;
-            for (int bit = 0; bit < 8; bit++)
-                parity += (key[i] >> bit) & 1;
-            if (parity % 2 == 0)
-                key[i] |= 1;
-        }
-
-        return key;
-    }
-
-    /// <summary>
-    /// Performs a single-block DES-ECB encryption.
-    /// </summary>
-    private static byte[] DesEcbEncrypt(byte[] key, byte[] data)
-    {
-        using var des = DES.Create();
-        des.Key = key;
-        des.Mode = CipherMode.ECB;
-        des.Padding = PaddingMode.None;
-
-        using var encryptor = des.CreateEncryptor();
-        var result = new byte[8];
-        encryptor.TransformBlock(data, 0, 8, result, 0);
-        return result;
-    }
-
-    /// <summary>
-    /// RC4 stream cipher transform (encrypt/decrypt are the same operation).
-    /// </summary>
-    private static byte[] Rc4Transform(byte[] key, byte[] data)
-    {
-        // Initialize S-box
-        var s = new byte[256];
-        for (int i = 0; i < 256; i++)
-            s[i] = (byte)i;
-
-        int j = 0;
-        for (int i = 0; i < 256; i++)
-        {
-            j = (j + s[i] + key[i % key.Length]) & 0xFF;
-            (s[i], s[j]) = (s[j], s[i]);
-        }
-
-        // Transform
-        var output = new byte[data.Length];
-        int x = 0, y = 0;
-        for (int k = 0; k < data.Length; k++)
-        {
-            x = (x + 1) & 0xFF;
-            y = (y + s[x]) & 0xFF;
-            (s[x], s[y]) = (s[y], s[x]);
-            output[k] = (byte)(data[k] ^ s[(s[x] + s[y]) & 0xFF]);
-        }
-
-        return output;
     }
 }

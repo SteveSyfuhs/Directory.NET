@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Directory.Core.Interfaces;
 using Directory.Core.Models;
 using Directory.Ldap.Protocol;
@@ -143,7 +145,7 @@ public class PasswordModifyHandler
 
     /// <summary>
     /// Check if the new password matches any entry in the user's password history.
-    /// The passwordHistory attribute stores NT hashes of previous passwords as hex strings.
+    /// The passwordHistory attribute stores SHA-256 hashes of previous passwords as hex strings.
     /// </summary>
     private PasswordModifyResult CheckPasswordHistory(DirectoryObject user, string newPassword)
     {
@@ -151,7 +153,7 @@ public class PasswordModifyHandler
         if (historyAttr is null || historyAttr.Values.Count == 0)
             return null;
 
-        var newHash = Convert.ToHexString(_passwordPolicy.ComputeNTHash(newPassword));
+        var newHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(newPassword)));
 
         foreach (var historyEntry in historyAttr.GetStrings())
         {

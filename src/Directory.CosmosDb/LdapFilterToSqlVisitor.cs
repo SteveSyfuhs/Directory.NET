@@ -26,7 +26,7 @@ public class LdapFilterToSqlVisitor : IFilterVisitor<string>
             "distinguishedname" => "c.distinguishedName",
             "objectguid" => "c.objectGuid",
             "objectsid" => "c.objectSid",
-            "samaccountname" or "samaccountname" => "c.samAccountName",
+            "samaccountname" => "c.samAccountName",
             "userprincipalname" => "c.userPrincipalName",
             "cn" => "c.cn",
             "displayname" => "c.displayName",
@@ -96,20 +96,27 @@ public class LdapFilterToSqlVisitor : IFilterVisitor<string>
         // Decode it to the stored string format for Cosmos DB comparison.
         var filterValue = NormalizeBinaryFilterValue(node.Attribute, node.Value);
         var param = AddParameter(filterValue);
+        var useLower = !IsBinaryAttribute(node.Attribute);
 
         // For array-type attributes (objectClass, memberOf, member, servicePrincipalName),
-        // use ARRAY_CONTAINS
+        // use EXISTS with LOWER() for case-insensitive matching
         if (IsArrayAttribute(node.Attribute))
         {
+            if (useLower)
+                return $"EXISTS(SELECT VALUE v FROM v IN {path} WHERE LOWER(v) = LOWER({param}))";
             return $"ARRAY_CONTAINS({path}, {param})";
         }
 
         // For attributes stored in the Attributes dictionary, check the Values array
         if (path.StartsWith("c.attributes."))
         {
+            if (useLower)
+                return $"EXISTS(SELECT VALUE v FROM v IN {path}.Values WHERE LOWER(v) = LOWER({param}))";
             return $"ARRAY_CONTAINS({path}.Values, {param})";
         }
 
+        if (useLower)
+            return $"LOWER({path}) = LOWER({param})";
         return $"{path} = {param}";
     }
 
@@ -155,6 +162,9 @@ public class LdapFilterToSqlVisitor : IFilterVisitor<string>
     {
         var path = MapAttributePath(node.Attribute);
         var param = AddParameter(node.Value);
+
+        if (!IsBinaryAttribute(node.Attribute))
+            return $"LOWER({path}) >= LOWER({param})";
         return $"{path} >= {param}";
     }
 
@@ -162,6 +172,9 @@ public class LdapFilterToSqlVisitor : IFilterVisitor<string>
     {
         var path = MapAttributePath(node.Attribute);
         var param = AddParameter(node.Value);
+
+        if (!IsBinaryAttribute(node.Attribute))
+            return $"LOWER({path}) <= LOWER({param})";
         return $"{path} <= {param}";
     }
 
@@ -214,6 +227,22 @@ public class LdapFilterToSqlVisitor : IFilterVisitor<string>
         return attr.ToLowerInvariant() switch
         {
             "objectclass" or "memberof" or "member" or "serviceprincipalname" => true,
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// Identifies binary/GUID/SID attributes that should NOT have LOWER() applied
+    /// because their values are not case-sensitive strings (they are binary-encoded
+    /// or have fixed canonical representations).
+    /// </summary>
+    private static bool IsBinaryAttribute(string attr)
+    {
+        return attr.ToLowerInvariant() switch
+        {
+            "objectguid" or "objectsid" or "ntsecuritydescriptor"
+                or "usercertificate" or "cacertificate" or "logonhours"
+                or "sidhistory" or "msds-generationid" => true,
             _ => false,
         };
     }

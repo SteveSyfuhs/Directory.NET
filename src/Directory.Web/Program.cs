@@ -65,7 +65,6 @@ builder.Services.Configure<Directory.Web.Models.DcNodeOptions>(builder.Configura
 builder.Services.AddSingleton<ISchemaService, SchemaService>();
 builder.Services.AddSingleton<SchemaModificationService>();
 builder.Services.AddSingleton<IPasswordPolicy, PasswordService>();
-builder.Services.AddSingleton<NtlmAuthenticator>();
 builder.Services.AddSingleton<IUserAccountControlService, UserAccountControlService>();
 builder.Services.AddSingleton<IAccessControlService, AccessControlService>();
 builder.Services.AddSingleton<GroupMembershipMaterializer>();
@@ -81,7 +80,6 @@ builder.Services.AddSingleton<DsCrackNamesService>();
 // MS-APDS: Authentication Protocol Domain Support
 builder.Services.AddSingleton<AccountRestrictions>();
 builder.Services.AddSingleton<ApdsLogonProcessor>();
-builder.Services.AddSingleton<NtlmPassThrough>();
 builder.Services.AddSingleton<PacValidation>();
 builder.Services.AddSingleton<DigestValidation>();
 

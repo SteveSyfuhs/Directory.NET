@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using Directory.Core.Interfaces;
 using Directory.Core.Models;
 using Microsoft.Extensions.Logging;
+using System.Linq;
 
 namespace Directory.Security.Apds;
 
@@ -69,7 +70,6 @@ public class ApdsLogonProcessor
     private readonly IPasswordPolicy _passwordPolicy;
     private readonly INamingContextService _ncService;
     private readonly AccountRestrictions _accountRestrictions;
-    private readonly NtlmPassThrough _ntlmPassThrough;
     private readonly ILogger<ApdsLogonProcessor> _logger;
 
     public ApdsLogonProcessor(
@@ -77,14 +77,12 @@ public class ApdsLogonProcessor
         IPasswordPolicy passwordPolicy,
         INamingContextService ncService,
         AccountRestrictions accountRestrictions,
-        NtlmPassThrough ntlmPassThrough,
         ILogger<ApdsLogonProcessor> logger)
     {
         _store = store;
         _passwordPolicy = passwordPolicy;
         _ncService = ncService;
         _accountRestrictions = accountRestrictions;
-        _ntlmPassThrough = ntlmPassThrough;
         _logger = logger;
     }
 
@@ -102,71 +100,6 @@ public class ApdsLogonProcessor
     {
         return await ProcessPasswordLogonAsync(
             tenantId, domain, username, password, LogonType.Interactive, ct);
-    }
-
-    /// <summary>
-    /// Processes a network logon (NTLM challenge/response).
-    /// MS-APDS 3.1.5: Network logon validates NTLM responses against the server challenge.
-    /// </summary>
-    public async Task<LogonResult> ProcessNetworkLogonAsync(
-        string tenantId,
-        string domain,
-        string username,
-        byte[] ntResponse,
-        byte[] lmResponse,
-        byte[] challenge,
-        CancellationToken ct = default)
-    {
-        _logger.LogDebug("Processing network logon for {Domain}\\{User}", domain, username);
-
-        var user = await ResolveUserAsync(tenantId, domain, username, ct);
-        if (user is null)
-        {
-            return new LogonResult { Status = NtStatus.StatusNoSuchUser };
-        }
-
-        // Check account restrictions
-        var restrictionStatus = _accountRestrictions.CheckAccountRestrictions(user, LogonType.Network);
-        if (restrictionStatus != NtStatus.StatusSuccess)
-        {
-            return new LogonResult { Status = restrictionStatus };
-        }
-
-        // Validate NTLM response
-        if (string.IsNullOrEmpty(user.NTHash))
-        {
-            return new LogonResult { Status = NtStatus.StatusWrongPassword };
-        }
-
-        var validationResult = _ntlmPassThrough.ValidateNtlmResponse(
-            user, domain, username, challenge, ntResponse, lmResponse);
-
-        if (!validationResult.IsValid)
-        {
-            // Bad password: update count and possibly lock out
-            _accountRestrictions.UpdateBadPasswordCount(user);
-            await _store.UpdateAsync(user, ct);
-
-            _logger.LogDebug("Network logon failed for {User}: bad credentials", username);
-            return new LogonResult { Status = NtStatus.StatusLogonFailure };
-        }
-
-        // Successful authentication
-        _accountRestrictions.ResetBadPasswordCount(user);
-        user.LastLogon = DateTimeOffset.UtcNow.ToFileTime();
-        await _store.UpdateAsync(user, ct);
-
-        var validationInfo = await BuildValidationInfoAsync(tenantId, user, domain, ct);
-        validationInfo.UserSessionKey = validationResult.SessionKey ?? new byte[16];
-
-        return new LogonResult
-        {
-            Status = NtStatus.StatusSuccess,
-            User = user,
-            ValidationInfo = validationInfo,
-            SessionKey = validationResult.SessionKey,
-            Authorization = BuildAuthorizationData(user, validationInfo),
-        };
     }
 
     /// <summary>
@@ -243,21 +176,31 @@ public class ApdsLogonProcessor
             return new LogonResult { Status = restrictionStatus };
         }
 
-        // Validate password
-        if (string.IsNullOrEmpty(user.NTHash))
+        // Validate password by deriving Kerberos keys and comparing
+        if (user.KerberosKeys.Count == 0)
         {
             return new LogonResult { Status = NtStatus.StatusWrongPassword };
         }
 
-        var computedHash = _passwordPolicy.ComputeNTHash(password);
-        var storedHash = Convert.FromHexString(user.NTHash);
+        var principalName = user.UserPrincipalName ?? user.SAMAccountName ?? user.Cn ?? "unknown";
+        var realm = ResolveDomainDn(domain);
+        var parsed = DistinguishedName.Parse(realm);
+        var realmName = parsed.GetDomainDnsName().ToUpperInvariant();
+        var candidateKeys = _passwordPolicy.DeriveKerberosKeys(principalName, password, realmName);
 
-        if (!CryptographicOperations.FixedTimeEquals(computedHash, storedHash))
+        // Compare AES256 key
+        var candidateAes = candidateKeys.FirstOrDefault(k => k.EncryptionType == 18); // AES256
+        var storedAes = user.KerberosKeys
+            .Select(k => k.Split(':'))
+            .Where(p => p.Length == 2 && p[0] == "18")
+            .Select(p => Convert.FromBase64String(p[1]))
+            .FirstOrDefault();
+
+        if (candidateAes is null || storedAes is null ||
+            !CryptographicOperations.FixedTimeEquals(candidateAes.KeyValue, storedAes))
         {
-            // Bad password
             _accountRestrictions.UpdateBadPasswordCount(user);
             await _store.UpdateAsync(user, ct);
-
             _logger.LogDebug("{LogonType} logon failed for {User}: wrong password", logonType, username);
             return new LogonResult { Status = NtStatus.StatusLogonFailure };
         }

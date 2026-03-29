@@ -86,7 +86,7 @@ public class CosmosDirectoryStore : IDirectoryStore, IStreamingDirectoryStore
     public async Task<DirectoryObject> GetBySamAccountNameAsync(string tenantId, string domainDn, string samAccountName, CancellationToken ct = default)
     {
         var query = new QueryDefinition(
-            "SELECT * FROM c WHERE c.samAccountName = @sam AND c.tenantId = @tenantId AND c.domainDn = @domainDn")
+            "SELECT * FROM c WHERE LOWER(c.samAccountName) = LOWER(@sam) AND c.tenantId = @tenantId AND c.domainDn = @domainDn")
             .WithParameter("@sam", samAccountName)
             .WithParameter("@tenantId", tenantId)
             .WithParameter("@domainDn", domainDn);
@@ -105,7 +105,7 @@ public class CosmosDirectoryStore : IDirectoryStore, IStreamingDirectoryStore
 
     public async Task<DirectoryObject> GetByUpnAsync(string tenantId, string upn, CancellationToken ct = default)
     {
-        var query = new QueryDefinition("SELECT * FROM c WHERE c.userPrincipalName = @upn AND c.tenantId = @tenantId")
+        var query = new QueryDefinition("SELECT * FROM c WHERE LOWER(c.userPrincipalName) = LOWER(@upn) AND c.tenantId = @tenantId")
             .WithParameter("@upn", upn)
             .WithParameter("@tenantId", tenantId);
 
@@ -483,7 +483,7 @@ public class CosmosDirectoryStore : IDirectoryStore, IStreamingDirectoryStore
 
     public async Task<IReadOnlyList<DirectoryObject>> GetByServicePrincipalNameAsync(string tenantId, string spn, CancellationToken ct = default)
     {
-        var query = new QueryDefinition("SELECT * FROM c WHERE ARRAY_CONTAINS(c.servicePrincipalName, @spn) AND c.tenantId = @tenantId")
+        var query = new QueryDefinition("SELECT * FROM c WHERE EXISTS(SELECT VALUE v FROM v IN c.servicePrincipalName WHERE LOWER(v) = LOWER(@spn)) AND c.tenantId = @tenantId")
             .WithParameter("@spn", spn)
             .WithParameter("@tenantId", tenantId);
 

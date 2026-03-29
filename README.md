@@ -22,7 +22,7 @@ The solution is organised into 11 projects:
 |---|---|---|
 | `Directory.Core` | Library | Domain model, interfaces, caching abstractions, telemetry |
 | `Directory.Schema` | Library | AD schema definitions, attribute syntax validation, OID registry |
-| `Directory.Security` | Library | NTLM, Kerberos PAC, ACL/DACL enforcement, certificate authority, OAuth 2.0/OIDC, SAML 2.0, FIDO2, MFA, RADIUS, PAM, managed MD4 implementation |
+| `Directory.Security` | Library | Kerberos PAC, ACL/DACL enforcement, certificate authority, OAuth 2.0/OIDC, SAML 2.0, FIDO2, MFA, RADIUS, PAM |
 | `Directory.CosmosDb` | Library | Azure Cosmos DB data access layer, change-feed replication consumer |
 | `Directory.Ldap` | Library | RFC 4511 LDAP v3 protocol implementation, filter evaluation, ASN.1 BER codec |
 | `Directory.Kerberos` | Library | Kerberos v5 AS/TGS exchange, PAC generation, delegation support (built on Kerberos.NET) |
@@ -79,11 +79,12 @@ The test project lives under `tests/Directory.Tests`.
 
 - **AD-compatible LDAP**: full v3 support including paged results, server-side sorting, VLV,
   persistent search, and LDAP over TLS (LDAPS).
-- **Kerberos authentication**: AS/TGS with PAC generation, constrained delegation (S4U2Proxy),
-  PKINIT (smart card), cross-realm trusts.
+- **Kerberos-first authentication**: AS/TGS with PAC generation, constrained delegation (S4U2Proxy),
+  PKINIT (smart card), cross-realm trusts. NTLM is intentionally not supported — all authentication
+  uses AES-based Kerberos (AES256-CTS, AES128-CTS). No MD4, RC4, or NT hash dependencies.
 - **Fine-grained password policies**: per-OU/per-group PSO objects (MS-ADTS 3.1.1.5.2).
-- **Cross-platform NT hash**: managed MD4 implementation (RFC 1320) for NT hash computation on
-  Windows and Linux without platform-specific crypto dependencies.
+- **Case-insensitive directory queries**: LDAP filter evaluation and Cosmos DB queries use
+  case-insensitive string comparison for attribute values and DN lookups.
 - **Multi-factor authentication**: TOTP, FIDO2/WebAuthn, conditional risk-based MFA.
 - **Certificate Authority**: internal CA with auto-enrollment and template management.
 - **Group Managed Service Accounts** (gMSA): automated password rotation per MS-GMSAD.
@@ -356,7 +357,7 @@ Directory.NET/
 ├── src/
 │   ├── Directory.Core/          # Domain model, interfaces, caching, telemetry
 │   ├── Directory.Schema/        # AD schema, attribute syntax, OID registry
-│   ├── Directory.Security/      # Auth, ACL, CA, OAuth, SAML, FIDO2, MFA, MD4
+│   ├── Directory.Security/      # Auth, ACL, CA, OAuth, SAML, FIDO2, MFA
 │   ├── Directory.CosmosDb/      # Cosmos DB data access, change feed
 │   ├── Directory.Ldap/          # LDAP v3 protocol, BER codec, filter engine
 │   ├── Directory.Kerberos/      # Kerberos v5 AS/TGS, PAC, delegation

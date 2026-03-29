@@ -8,7 +8,7 @@ using System.Security.Cryptography;
 namespace Directory.Security;
 
 /// <summary>
-/// Implements password validation, NT hash computation, and Kerberos key derivation
+/// Implements password validation and Kerberos key derivation
 /// using Kerberos.NET library primitives.
 /// </summary>
 public class PasswordService : IPasswordPolicy
@@ -37,16 +37,29 @@ public class PasswordService : IPasswordPolicy
             return false;
         }
 
-        if (string.IsNullOrEmpty(obj.NTHash))
+        if (obj.KerberosKeys is null || obj.KerberosKeys.Count == 0)
         {
-            _logger.LogDebug("No NT hash stored for {DN}", dn);
+            _logger.LogDebug("No Kerberos keys stored for {DN}", dn);
             return false;
         }
 
-        var computedHash = ComputeNTHash(password);
-        var storedHash = Convert.FromHexString(obj.NTHash);
+        // Derive AES256 key from the candidate password
+        var principalName = obj.UserPrincipalName ?? obj.SAMAccountName ?? obj.Cn ?? "unknown";
+        var parsed = DistinguishedName.Parse(dn);
+        var realm = parsed.GetDomainDnsName().ToUpperInvariant();
+        var candidateKeys = DeriveKerberosKeys(principalName, password, realm);
+        var candidateAes256 = candidateKeys.FirstOrDefault(k => k.EncryptionType == (int)EncryptionType.AES256_CTS_HMAC_SHA1_96);
+        if (candidateAes256 is null) return false;
 
-        return CryptographicOperations.FixedTimeEquals(computedHash, storedHash);
+        // Find stored AES256 key
+        var storedAes256Key = obj.KerberosKeys
+            .Select(k => k.Split(':'))
+            .Where(p => p.Length == 2 && p[0] == ((int)EncryptionType.AES256_CTS_HMAC_SHA1_96).ToString())
+            .Select(p => Convert.FromBase64String(p[1]))
+            .FirstOrDefault();
+        if (storedAes256Key is null) return false;
+
+        return CryptographicOperations.FixedTimeEquals(candidateAes256.KeyValue, storedAes256Key);
     }
 
     public async Task SetPasswordAsync(string tenantId, string dn, string password, CancellationToken ct = default)
@@ -55,9 +68,8 @@ public class PasswordService : IPasswordPolicy
         if (obj is null)
             throw new InvalidOperationException($"User not found: {dn}");
 
-        // Compute NT hash
-        var ntHash = ComputeNTHash(password);
-        obj.NTHash = Convert.ToHexString(ntHash);
+        // Clear legacy NT hash
+        obj.NTHash = null;
 
         // Derive Kerberos keys
         var principalName = obj.UserPrincipalName ?? obj.SAMAccountName ?? obj.Cn ?? "unknown";
@@ -96,25 +108,8 @@ public class PasswordService : IPasswordPolicy
     }
 
     /// <summary>
-    /// Compute NT hash: MD4(UTF-16LE(password)).
-    /// Uses a managed MD4 implementation for cross-platform compatibility,
-    /// since Kerberos.NET's LinuxCryptoPal does not support MD4.
-    /// </summary>
-    public byte[] ComputeNTHash(string password)
-    {
-        if (string.IsNullOrEmpty(password))
-        {
-            // Well-known NT hash for empty password: MD4 of zero-length UTF-16LE input
-            // This is a fixed value: 31d6cfe0d16ae931b73c59d7e0c089c0
-            return Convert.FromHexString("31D6CFE0D16AE931B73C59D7E0C089C0");
-        }
-
-        return Md4.ComputeNTHash(password);
-    }
-
-    /// <summary>
     /// Derive Kerberos long-term keys from a password using Kerberos.NET.
-    /// Supports AES256-CTS-HMAC-SHA1-96, AES128-CTS-HMAC-SHA1-96, and RC4-HMAC.
+    /// Supports AES256-CTS-HMAC-SHA1-96 and AES128-CTS-HMAC-SHA1-96.
     /// </summary>
     public List<KerberosKeyData> DeriveKerberosKeys(string principalName, string password, string realm)
     {
@@ -124,24 +119,12 @@ public class PasswordService : IPasswordPolicy
         {
             EncryptionType.AES256_CTS_HMAC_SHA1_96,
             EncryptionType.AES128_CTS_HMAC_SHA1_96,
-            EncryptionType.RC4_HMAC_NT,
         };
 
         return etypes.Select(etype =>
         {
-            byte[] keyBytes;
-
-            if (etype == EncryptionType.RC4_HMAC_NT)
-            {
-                // RC4-HMAC key is just the NT hash (MD4 of UTF-16LE password).
-                // Use managed MD4 directly to avoid PlatformNotSupportedException on Linux.
-                keyBytes = Md4.ComputeNTHash(password);
-            }
-            else
-            {
-                var key = new KerberosKey(password, principalName: principal, etype: etype);
-                keyBytes = key.GetKey().ToArray();
-            }
+            var key = new KerberosKey(password, principalName: principal, etype: etype);
+            var keyBytes = key.GetKey().ToArray();
 
             return new KerberosKeyData
             {

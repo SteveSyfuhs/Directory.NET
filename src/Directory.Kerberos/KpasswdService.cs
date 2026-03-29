@@ -337,18 +337,6 @@ public class KpasswdService : IHostedService, IDisposable
             }
         }
 
-        if (!string.IsNullOrEmpty(principal.NTHash))
-        {
-            var ntHash = Convert.FromHexString(principal.NTHash);
-            return new KerberosKey(
-                ntHash,
-                principal: new PrincipalName(
-                    PrincipalNameType.NT_SRV_INST,
-                    _options.DefaultRealm,
-                    new[] { "krbtgt", _options.DefaultRealm }),
-                etype: EncryptionType.RC4_HMAC_NT);
-        }
-
         throw new InvalidOperationException("No credentials available for krbtgt");
     }
 

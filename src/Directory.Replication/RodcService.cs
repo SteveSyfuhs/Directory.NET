@@ -155,7 +155,7 @@ public class RodcService
     /// Steps per MS-ADTS 3.1.1.10.4:
     /// 1. Verify the user's DN is in the allowed list (msDS-RevealOnDemandGroup)
     /// 2. Verify the user's DN is NOT in the denied list (msDS-NeverRevealGroup) — deny wins
-    /// 3. Fetch the user's credential attributes (NTHash, KerberosKeys) from the writable DC via store
+    /// 3. Fetch the user's credential attributes (KerberosKeys) from the writable DC via store
     /// 4. Cache them locally for this RODC
     /// </summary>
     /// <param name="userDn">Distinguished name of the account to pre-cache.</param>
@@ -188,13 +188,12 @@ public class RodcService
         }
 
         // Verify the account has credential data to cache
-        var hasNtHash = !string.IsNullOrEmpty(account.NTHash);
         var hasKerberosKeys = account.KerberosKeys != null && account.KerberosKeys.Count > 0;
 
-        if (!hasNtHash && !hasKerberosKeys)
+        if (!hasKerberosKeys)
         {
             _logger.LogWarning(
-                "Cannot pre-cache password for {UserDn} — no credential attributes found on the account",
+                "Cannot pre-cache password for {UserDn} — no Kerberos keys found on the account",
                 userDn);
             return false;
         }
@@ -218,7 +217,6 @@ public class RodcService
             AccountDn = userDn,
             SamAccountName = account.SAMAccountName ?? "",
             ObjectSid = account.ObjectSid ?? "",
-            NTHash = account.NTHash ?? "",
             HasKerberosKeys = hasKerberosKeys,
             CachedAt = DateTimeOffset.UtcNow,
         };
@@ -227,8 +225,8 @@ public class RodcService
 
         _logger.LogInformation(
             "Pre-cached credentials for {AccountDn} (SAMAccountName={Sam}, SID={Sid}) on RODC. " +
-            "NTHash={HasNtHash}, KerberosKeys={HasKerberos}",
-            userDn, entry.SamAccountName, entry.ObjectSid, hasNtHash, hasKerberosKeys);
+            "KerberosKeys={HasKerberos}",
+            userDn, entry.SamAccountName, entry.ObjectSid, hasKerberosKeys);
 
         return true;
     }
@@ -314,11 +312,6 @@ public class CachedCredentialEntry
     /// Security Identifier of the cached account.
     /// </summary>
     public string ObjectSid { get; init; } = "";
-
-    /// <summary>
-    /// The cached NT hash (hex-encoded). Empty if the account had no NT hash.
-    /// </summary>
-    public string NTHash { get; init; } = "";
 
     /// <summary>
     /// Whether Kerberos long-term keys were cached for this account.

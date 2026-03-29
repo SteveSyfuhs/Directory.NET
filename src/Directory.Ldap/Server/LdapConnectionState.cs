@@ -38,11 +38,6 @@ public class LdapConnectionState
     public bool FastBindMode { get; set; }
 
     /// <summary>
-    /// Server challenge bytes for in-progress NTLM authentication.
-    /// </summary>
-    public byte[] NtlmChallenge { get; set; }
-
-    /// <summary>
     /// State for an in-progress GSSAPI SASL multi-step exchange.
     /// Non-null between the initial AP-REQ validation and security layer negotiation completion.
     /// </summary>

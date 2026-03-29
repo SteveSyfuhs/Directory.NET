@@ -3,8 +3,8 @@ using System.Formats.Asn1;
 namespace Directory.Rpc.Client;
 
 /// <summary>
-/// Builds SPNEGO tokens that wrap NTLM messages for RPC authentication per RFC 4178.
-/// Windows DCs require SPNEGO wrapping around raw NTLM tokens for DRSUAPI calls.
+/// Builds SPNEGO tokens for RPC authentication per RFC 4178.
+/// NTLM wrapping has been removed; only Kerberos SPNEGO support remains.
 /// </summary>
 public static class SpnegoTokenBuilder
 {
@@ -19,35 +19,31 @@ public static class SpnegoTokenBuilder
     // SPNEGO OID: 1.3.6.1.5.5.2
     private const string SpnegoOid = "1.3.6.1.5.5.2";
 
-    // NTLM mechanism OID: 1.3.6.1.4.1.311.2.2.10
-    private const string NtlmMechOid = "1.3.6.1.4.1.311.2.2.10";
+    // Kerberos mechanism OID: 1.2.840.113554.1.2.2
+    private const string KerberosMechOid = "1.2.840.113554.1.2.2";
 
     /// <summary>
-    /// Wraps an NTLM Type 1 (Negotiate) message in a SPNEGO negTokenInit for the BIND auth verifier.
+    /// Wraps a Kerberos AP-REQ token in a SPNEGO negTokenInit for the BIND auth verifier.
     /// Produces a GSS-API InitialContextToken [APPLICATION 0] containing:
     ///   thisMech = SPNEGO OID (1.3.6.1.5.5.2)
-    ///   innerToken = NegTokenInit { mechTypes = [NTLM OID], mechToken = ntlmType1 }
+    ///   innerToken = NegTokenInit { mechTypes = [Kerberos OID], mechToken = kerberosToken }
     /// </summary>
-    public static byte[] WrapNtlmNegotiate(byte[] ntlmType1Message)
+    public static byte[] WrapKerberosNegotiate(byte[] kerberosToken)
     {
         // Build the NegTokenInit SEQUENCE
-        // NegTokenInit ::= SEQUENCE {
-        //   mechTypes  [0] MechTypeList,    -- SEQUENCE OF OID
-        //   mechToken  [2] OCTET STRING     -- the NTLM Type 1
-        // }
         var negTokenInitWriter = new AsnWriter(AsnEncodingRules.DER);
         negTokenInitWriter.PushSequence();
         {
             // mechTypes [0] SEQUENCE OF OID
             negTokenInitWriter.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 0));
             negTokenInitWriter.PushSequence();
-            negTokenInitWriter.WriteObjectIdentifier(NtlmMechOid);
+            negTokenInitWriter.WriteObjectIdentifier(KerberosMechOid);
             negTokenInitWriter.PopSequence();
             negTokenInitWriter.PopSequence(new Asn1Tag(TagClass.ContextSpecific, 0));
 
             // mechToken [2] OCTET STRING
             negTokenInitWriter.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 2));
-            negTokenInitWriter.WriteOctetString(ntlmType1Message);
+            negTokenInitWriter.WriteOctetString(kerberosToken);
             negTokenInitWriter.PopSequence(new Asn1Tag(TagClass.ContextSpecific, 2));
         }
         negTokenInitWriter.PopSequence();
@@ -61,7 +57,6 @@ public static class SpnegoTokenBuilder
         byte[] wrappedNegToken = negTokenWrapper.Encode();
 
         // Wrap in GSS-API InitialContextToken [APPLICATION 0] IMPLICIT SEQUENCE
-        // { thisMech OID, innerToken }
         var gssWriter = new AsnWriter(AsnEncodingRules.DER);
         gssWriter.PushSequence(new Asn1Tag(TagClass.Application, 0, isConstructed: true));
         gssWriter.WriteObjectIdentifier(SpnegoOid);
@@ -72,15 +67,11 @@ public static class SpnegoTokenBuilder
     }
 
     /// <summary>
-    /// Wraps an NTLM Type 3 (Authenticate) message in a SPNEGO negTokenResp for AUTH3.
-    /// Produces a NegTokenResp { negState = accept-incomplete(1), responseToken = ntlmType3 }
+    /// Wraps a Kerberos AP-REP or continuation token in a SPNEGO negTokenResp.
+    /// Produces a NegTokenResp { negState = accept-incomplete(1), responseToken = kerberosToken }
     /// </summary>
-    public static byte[] WrapNtlmAuthenticate(byte[] ntlmType3Message)
+    public static byte[] WrapKerberosAuthenticate(byte[] kerberosToken)
     {
-        // NegTokenResp ::= SEQUENCE {
-        //   negState     [0] ENUMERATED { accept-incomplete(1) },
-        //   responseToken [2] OCTET STRING
-        // }
         var respWriter = new AsnWriter(AsnEncodingRules.DER);
         respWriter.PushSequence();
         {
@@ -91,7 +82,7 @@ public static class SpnegoTokenBuilder
 
             // responseToken [2] OCTET STRING
             respWriter.PushSequence(new Asn1Tag(TagClass.ContextSpecific, 2));
-            respWriter.WriteOctetString(ntlmType3Message);
+            respWriter.WriteOctetString(kerberosToken);
             respWriter.PopSequence(new Asn1Tag(TagClass.ContextSpecific, 2));
         }
         respWriter.PopSequence();
@@ -107,10 +98,10 @@ public static class SpnegoTokenBuilder
     }
 
     /// <summary>
-    /// Unwraps a SPNEGO negTokenResp from a BIND_ACK to extract the NTLM Type 2 (Challenge) message.
-    /// Parses NegTokenResp { negState, supportedMech, responseToken = ntlmType2 }
+    /// Unwraps a SPNEGO negTokenResp to extract the inner mechanism token (e.g., Kerberos AP-REP).
+    /// Parses NegTokenResp { negState, supportedMech, responseToken }
     /// </summary>
-    public static byte[] UnwrapNtlmChallenge(byte[] spnegoToken)
+    public static byte[] UnwrapResponseToken(byte[] spnegoToken)
     {
         var reader = new AsnReader(spnegoToken, AsnEncodingRules.DER);
 
@@ -160,7 +151,7 @@ public static class SpnegoTokenBuilder
                         mechReader.ReadObjectIdentifier(); // consume
                         break;
                     }
-                    case 2: // responseToken [2] OCTET STRING — this is the NTLM Type 2
+                    case 2: // responseToken [2] OCTET STRING — the mechanism token
                     {
                         var tokenReader = seqReader.ReadSequence(
                             new Asn1Tag(TagClass.ContextSpecific, 2, isConstructed: true));
@@ -190,7 +181,7 @@ public static class SpnegoTokenBuilder
         if (responseToken is null)
         {
             throw new InvalidOperationException(
-                "SPNEGO negTokenResp did not contain a responseToken (NTLM Type 2 challenge).");
+                "SPNEGO negTokenResp did not contain a responseToken.");
         }
 
         return responseToken;

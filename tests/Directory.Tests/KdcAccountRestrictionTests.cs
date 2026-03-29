@@ -42,7 +42,7 @@ public class KdcAccountRestrictionTests
         var user = CreateTestUser("jdoe", $"{DomainSid}-1001");
         user.UserAccountControl = UacNormalAccount;
         user.PwdLastSet = DateTimeOffset.UtcNow.AddDays(-5).ToFileTime();
-        SetNtHash(user);
+        SetKerberosKeys(user);
 
         var principal = CreatePrincipal(user);
 
@@ -57,7 +57,7 @@ public class KdcAccountRestrictionTests
         var user = CreateTestUser("jdoe", $"{DomainSid}-1001");
         user.UserAccountControl = UacNormalAccount | UacAccountDisable;
         user.PwdLastSet = DateTimeOffset.UtcNow.AddDays(-5).ToFileTime();
-        SetNtHash(user);
+        SetKerberosKeys(user);
 
         var principal = CreatePrincipal(user);
 
@@ -71,7 +71,7 @@ public class KdcAccountRestrictionTests
         var user = CreateTestUser("jdoe", $"{DomainSid}-1001");
         user.UserAccountControl = UacNormalAccount | UacLockout;
         user.PwdLastSet = DateTimeOffset.UtcNow.AddDays(-5).ToFileTime();
-        SetNtHash(user);
+        SetKerberosKeys(user);
 
         var principal = CreatePrincipal(user);
 
@@ -87,7 +87,7 @@ public class KdcAccountRestrictionTests
         user.PwdLastSet = DateTimeOffset.UtcNow.AddDays(-5).ToFileTime();
         // Set account expiry in the past
         user.AccountExpires = DateTimeOffset.UtcNow.AddDays(-1).ToFileTime();
-        SetNtHash(user);
+        SetKerberosKeys(user);
 
         var principal = CreatePrincipal(user);
 
@@ -102,7 +102,7 @@ public class KdcAccountRestrictionTests
         user.UserAccountControl = UacNormalAccount;
         // pwdLastSet = 0 means must change password
         user.PwdLastSet = 0;
-        SetNtHash(user);
+        SetKerberosKeys(user);
 
         var principal = CreatePrincipal(user);
 
@@ -117,7 +117,7 @@ public class KdcAccountRestrictionTests
         user.UserAccountControl = UacNormalAccount | UacDontExpirePassword;
         // pwdLastSet = 0 would normally trigger must-change, but DONT_EXPIRE bypasses it
         user.PwdLastSet = 0;
-        SetNtHash(user);
+        SetKerberosKeys(user);
 
         var principal = CreatePrincipal(user);
 
@@ -133,7 +133,7 @@ public class KdcAccountRestrictionTests
         user.UserAccountControl = UacNormalAccount;
         user.PwdLastSet = DateTimeOffset.UtcNow.AddDays(-5).ToFileTime();
         user.AccountExpires = 0x7FFFFFFFFFFFFFFF; // Never expires
-        SetNtHash(user);
+        SetKerberosKeys(user);
 
         var principal = CreatePrincipal(user);
 
@@ -230,13 +230,14 @@ public class KdcAccountRestrictionTests
     }
 
     /// <summary>
-    /// Sets a dummy NT hash on the user so RetrieveLongTermCredential can return a key.
-    /// Uses a well-known hash for an empty password.
+    /// Sets dummy Kerberos keys on the user so RetrieveLongTermCredential can return a key.
     /// </summary>
-    private static void SetNtHash(DirectoryObject user)
+    private static void SetKerberosKeys(DirectoryObject user)
     {
-        // Well-known NT hash for "Password1!" — just need any valid 32-char hex string
-        user.NTHash = "31D6CFE0D16AE931B73C59D7E0C089C0";
+        // Set an AES256 key (EncryptionType 18) with a dummy 32-byte value
+        var dummyAes256Key = Convert.ToBase64String(new byte[32]);
+        var dummyAes128Key = Convert.ToBase64String(new byte[16]);
+        user.KerberosKeys = [$"18:{dummyAes256Key}", $"17:{dummyAes128Key}"];
     }
 
     private CosmosKerberosPrincipal CreatePrincipal(DirectoryObject user)
@@ -265,9 +266,6 @@ internal class StubPasswordPolicy : Directory.Core.Interfaces.IPasswordPolicy
 
     public bool MeetsComplexityRequirements(string password, string samAccountName = null)
         => true;
-
-    public byte[] ComputeNTHash(string password)
-        => new byte[16];
 
     public List<Directory.Core.Interfaces.KerberosKeyData> DeriveKerberosKeys(string principalName, string password, string realm)
         => [];

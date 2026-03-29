@@ -8,34 +8,6 @@ public class PasswordPolicyTests
 {
     private readonly PasswordService _svc = new(null, null);
 
-    // ── NT Hash known-value tests ──────────────────────────────────────
-
-    [Fact]
-    public void ComputeNTHash_EmptyString_ReturnsWellKnownHash()
-    {
-        // The MD4 of a zero-length UTF-16LE input is a fixed value.
-        var hash = _svc.ComputeNTHash("");
-        Assert.Equal(16, hash.Length);
-        Assert.Equal("31D6CFE0D16AE931B73C59D7E0C089C0", Convert.ToHexString(hash));
-    }
-
-    [Fact]
-    public void ComputeNTHash_Password_ReturnsDeterministicHash()
-    {
-        var hash1 = _svc.ComputeNTHash("password");
-        var hash2 = _svc.ComputeNTHash("password");
-        Assert.Equal(16, hash1.Length);
-        Assert.Equal(hash1, hash2);
-    }
-
-    [Fact]
-    public void ComputeNTHash_DifferentPasswords_ProduceDifferentHashes()
-    {
-        var hash1 = _svc.ComputeNTHash("password");
-        var hash2 = _svc.ComputeNTHash("Password1!");
-        Assert.NotEqual(Convert.ToHexString(hash1), Convert.ToHexString(hash2));
-    }
-
     // ── Password complexity tests ──────────────────────────────────────
 
     [Fact]
@@ -109,10 +81,10 @@ public class PasswordPolicyTests
     // ── Kerberos key derivation ────────────────────────────────────────
 
     [Fact]
-    public void DeriveKerberosKeys_ProducesThreeKeys()
+    public void DeriveKerberosKeys_ProducesTwoKeys()
     {
         var keys = _svc.DeriveKerberosKeys("user@REALM.COM", "password", "REALM.COM");
-        Assert.Equal(3, keys.Count);
+        Assert.Equal(2, keys.Count);
     }
 
     [Fact]
@@ -132,20 +104,11 @@ public class PasswordPolicyTests
     }
 
     [Fact]
-    public void DeriveKerberosKeys_RC4KeyIs16Bytes()
-    {
-        var keys = _svc.DeriveKerberosKeys("user@REALM.COM", "password", "REALM.COM");
-        var rc4 = keys.First(k => k.EncryptionType == 23); // RC4
-        Assert.Equal(16, rc4.KeyValue.Length);
-    }
-
-    [Fact]
     public void DeriveKerberosKeys_EncryptionTypes_AreCorrect()
     {
         var keys = _svc.DeriveKerberosKeys("user@REALM.COM", "password", "REALM.COM");
         Assert.Equal(18, keys[0].EncryptionType); // AES256
         Assert.Equal(17, keys[1].EncryptionType); // AES128
-        Assert.Equal(23, keys[2].EncryptionType); // RC4
     }
 
     [Fact]

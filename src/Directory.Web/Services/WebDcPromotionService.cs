@@ -292,11 +292,10 @@ public class WebDcPromotionService
         // ── Step 1: Connect and bind via RPC ────────────────────────────────
         ReportProgress(2, "Connecting to Windows DC via RPC...");
 
-        byte[] ntHash = _passwordPolicy.ComputeNTHash(request.AdminPassword);
         var rpcLogger = _loggerFactory.CreateLogger("DrsRpcReplicationClient");
 
         await using var rpcClient = await DrsReplicationClient.CreateRpcClientAsync(
-            rpcHostname, username, domain, ntHash, rpcLogger, ct);
+            rpcHostname, username, domain, request.AdminPassword, rpcLogger, ct);
 
         _logger.LogInformation("RPC bind succeeded on {Hostname}, extensions={Flags}",
             rpcHostname, rpcClient.PartnerExtensions?.DwFlags);

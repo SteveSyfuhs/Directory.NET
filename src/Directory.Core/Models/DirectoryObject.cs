@@ -117,13 +117,13 @@ public class DirectoryObject
     public bool IsDeleted { get; set; }
 
     /// <summary>
-    /// NT hash stored as hex string (MD4 of UTF-16LE password). Used for NTLM auth.
+    /// Legacy NT hash field. Retained for schema compatibility but no longer populated or used for authentication.
     /// </summary>
     [JsonPropertyName("ntHash")]
     public string NTHash { get; set; }
 
     /// <summary>
-    /// Serialized Kerberos long-term credential keys (AES256, AES128, RC4).
+    /// Serialized Kerberos long-term credential keys (AES256-CTS, AES128-CTS).
     /// </summary>
     [JsonPropertyName("kerberosKeys")]
     public List<string> KerberosKeys { get; set; } = [];

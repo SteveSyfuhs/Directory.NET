@@ -171,7 +171,7 @@ public class RodcTests
             Cn = samAccountName,
             ObjectClass = ["top", "person", "organizationalPerson", "user"],
             ParentDn = $"CN=Users,{DomainDn}",
-            NTHash = "E52CAC67419A9A224A3B108F3FA6CB6D", // dummy hash for credential caching tests
+            KerberosKeys = [$"18:{Convert.ToBase64String(new byte[32])}", $"17:{Convert.ToBase64String(new byte[16])}"], // dummy keys for credential caching tests
             WhenCreated = now,
             WhenChanged = now,
         };

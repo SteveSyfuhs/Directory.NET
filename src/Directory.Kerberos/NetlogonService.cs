@@ -316,47 +316,21 @@ public class NetlogonService : IHostedService, IDisposable
         if (user is null)
             throw new NetlogonException($"User '{request.UserName}' not found", NtStatus.STATUS_NO_SUCH_USER);
 
-        if (string.IsNullOrEmpty(user.NTHash))
-            throw new NetlogonException("User has no NT hash", NtStatus.STATUS_WRONG_PASSWORD);
+        // Validate the user has Kerberos keys (AES256, etype 18)
+        var aes256Key = user.KerberosKeys?.FirstOrDefault(k => k.StartsWith("18:"));
+        if (string.IsNullOrEmpty(aes256Key))
+            throw new NetlogonException("User has no AES256 Kerberos key", NtStatus.STATUS_WRONG_PASSWORD);
 
-        // Validate NTLM response if provided
+        // NTLM pass-through authentication is deprecated in favour of Kerberos.
+        // If the client supplied an NTLM response we reject it and require Kerberos-based logon.
         if (!string.IsNullOrEmpty(request.NtlmResponse) && !string.IsNullOrEmpty(request.ServerChallenge))
         {
-            var ntHash = Convert.FromHexString(user.NTHash);
-            var challenge = Convert.FromBase64String(request.ServerChallenge);
-            var ntlmResponse = Convert.FromBase64String(request.NtlmResponse);
-            var lmResponse = string.IsNullOrEmpty(request.LmResponse)
-                ? Array.Empty<byte>()
-                : Convert.FromBase64String(request.LmResponse);
-
-            // NTLMv2 validation: HMAC-MD5(NTHash, UPPER(user) + domain) then
-            // HMAC-MD5(v2hash, challenge + client_blob)
-            var identityBytes = Encoding.Unicode.GetBytes(
-                request.UserName.ToUpperInvariant() + (request.DomainName ?? ""));
-
-            byte[] ntlmv2Hash;
-            using (var hmac = new HMACMD5(ntHash))
-            {
-                ntlmv2Hash = hmac.ComputeHash(identityBytes);
-            }
-
-            // The client blob is appended after the first 16 bytes of the NT response
-            if (ntlmResponse.Length >= 16)
-            {
-                var clientBlob = ntlmResponse[16..];
-                var proofInput = new byte[challenge.Length + clientBlob.Length];
-                challenge.CopyTo(proofInput, 0);
-                clientBlob.CopyTo(proofInput, challenge.Length);
-
-                byte[] expectedProof;
-                using (var hmac = new HMACMD5(ntlmv2Hash))
-                {
-                    expectedProof = hmac.ComputeHash(proofInput);
-                }
-
-                if (!CryptographicOperations.FixedTimeEquals(ntlmResponse.AsSpan(0, 16), expectedProof))
-                    throw new NetlogonException("NTLM response validation failed", NtStatus.STATUS_WRONG_PASSWORD);
-            }
+            _logger.LogWarning(
+                "NTLM pass-through logon attempted for {User}; NTLM is deprecated, use Kerberos authentication",
+                request.UserName);
+            throw new NetlogonException(
+                "NTLM authentication is deprecated. Use Kerberos authentication instead.",
+                NtStatus.STATUS_NOT_SUPPORTED);
         }
 
         // Check UAC flags for account status
@@ -439,11 +413,19 @@ public class NetlogonService : IHostedService, IDisposable
                 NtStatus.STATUS_NO_SUCH_USER);
 
         // In a full MS-NRPC implementation, the new password would be encrypted with the session key.
-        // Here we accept the new password hash directly (the custom client must encrypt in transit via TLS).
+        // Here we accept the new password directly (the custom client must encrypt in transit via TLS)
+        // and derive Kerberos keys from it.
         if (string.IsNullOrEmpty(request.NewPasswordNtHash))
             throw new NetlogonException("NewPasswordNtHash is required", NtStatus.STATUS_INVALID_PARAMETER);
 
-        computerAccount.NTHash = request.NewPasswordNtHash;
+        // Derive Kerberos keys (AES256, AES128) from the new password
+        var principalName = computerAccount.UserPrincipalName ?? computerAccount.SAMAccountName ?? request.AccountName;
+        var domainDns = _kerberosOptions.DefaultRealm.ToUpperInvariant();
+        var kerberosKeys = _passwordPolicy.DeriveKerberosKeys(principalName, request.NewPasswordNtHash, domainDns);
+        computerAccount.KerberosKeys = kerberosKeys
+            .Select(k => $"{k.EncryptionType}:{Convert.ToBase64String(k.KeyValue)}")
+            .ToList();
+        computerAccount.NTHash = null;
         computerAccount.PwdLastSet = DateTimeOffset.UtcNow.ToFileTime();
 
         await _store.UpdateAsync(computerAccount, ct);

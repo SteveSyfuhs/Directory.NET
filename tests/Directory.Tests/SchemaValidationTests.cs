@@ -172,15 +172,6 @@ public class LdapFilterParserTests
 public class PasswordServiceTests
 {
     [Fact]
-    public void ComputeNTHash_ProducesCorrectHash()
-    {
-        // Well-known NT hash for empty password
-        var svc = new Directory.Security.PasswordService(null, null);
-        var hash = svc.ComputeNTHash("");
-        Assert.Equal(16, hash.Length);
-    }
-
-    [Fact]
     public void MeetsComplexityRequirements_ValidPassword()
     {
         var svc = new Directory.Security.PasswordService(null, null);
@@ -195,13 +186,12 @@ public class PasswordServiceTests
     }
 
     [Fact]
-    public void DeriveKerberosKeys_ProducesThreeKeys()
+    public void DeriveKerberosKeys_ProducesTwoKeys()
     {
         var svc = new Directory.Security.PasswordService(null, null);
         var keys = svc.DeriveKerberosKeys("user@REALM", "password", "REALM");
-        Assert.Equal(3, keys.Count);
+        Assert.Equal(2, keys.Count);
         Assert.Equal(18, keys[0].EncryptionType); // AES256
         Assert.Equal(17, keys[1].EncryptionType); // AES128
-        Assert.Equal(23, keys[2].EncryptionType); // RC4
     }
 }

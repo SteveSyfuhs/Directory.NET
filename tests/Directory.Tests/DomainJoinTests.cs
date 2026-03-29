@@ -267,23 +267,6 @@ public class DomainJoinTests
     // ════════════════════════════════════════════════════════════════
 
     [Fact]
-    public async Task SetMachinePassword_StoresNtHash()
-    {
-        var machine = CreateMachineAccountObject();
-        await _store.CreateAsync(machine);
-
-        await _passwordService.SetPasswordAsync(TenantId, machine.DistinguishedName, MachinePassword);
-
-        var retrieved = await _store.GetByDnAsync(TenantId, machine.DistinguishedName);
-        Assert.NotNull(retrieved);
-        Assert.NotNull(retrieved.NTHash);
-        Assert.NotEmpty(retrieved.NTHash);
-
-        // NT hash should be a hex-encoded 16-byte hash (32 hex chars)
-        Assert.Equal(32, retrieved.NTHash.Length);
-    }
-
-    [Fact]
     public async Task SetMachinePassword_DerivesKerberosKeys()
     {
         var machine = CreateMachineAccountObject();
@@ -295,18 +278,17 @@ public class DomainJoinTests
         Assert.NotNull(retrieved);
         Assert.NotEmpty(retrieved.KerberosKeys);
 
-        // Must have AES256, AES128, and RC4 keys
-        Assert.Equal(3, retrieved.KerberosKeys.Count);
+        // Must have AES256 and AES128 keys
+        Assert.Equal(2, retrieved.KerberosKeys.Count);
 
         // Keys are stored as "EncryptionType:Base64Key"
         var keyTypes = retrieved.KerberosKeys
             .Select(k => k.Split(':')[0])
             .ToList();
 
-        // EncryptionType enum values: AES256=18, AES128=17, RC4=23
+        // EncryptionType enum values: AES256=18, AES128=17
         Assert.Contains("18", keyTypes);  // AES256_CTS_HMAC_SHA1_96
         Assert.Contains("17", keyTypes);  // AES128_CTS_HMAC_SHA1_96
-        Assert.Contains("23", keyTypes);  // RC4_HMAC_NT
     }
 
     [Fact]
@@ -368,27 +350,31 @@ public class DomainJoinTests
     // ════════════════════════════════════════════════════════════════
 
     [Fact]
-    public async Task NetrServerPasswordSet2_UpdatesNtHash()
+    public async Task NetrServerPasswordSet2_UpdatesKerberosKeys()
     {
         // Simulate the NRPC password rotation logic:
         // 1. Look up machine account
-        // 2. Compute new NT hash
+        // 2. Derive new Kerberos keys
         // 3. Update the account
         var machine = CreateMachineAccountObject();
         await _store.CreateAsync(machine);
 
         // Set an initial password
         await _passwordService.SetPasswordAsync(TenantId, machine.DistinguishedName, MachinePassword);
-        var oldHash = (await _store.GetByDnAsync(TenantId, machine.DistinguishedName)).NTHash;
+        var oldKeys = (await _store.GetByDnAsync(TenantId, machine.DistinguishedName)).KerberosKeys.ToList();
 
         // Simulate NRPC password rotation with a new password
         var newPassword = "N3wR0tatedP@ss!456";
-        var newNtHash = _passwordService.ComputeNTHash(newPassword);
-        machine.NTHash = Convert.ToHexString(newNtHash);
+        var principalName = machine.UserPrincipalName ?? machine.SAMAccountName ?? MachineAccountName;
+        var domainDnsUpper = DomainDns.ToUpperInvariant();
+        var newKeys = _passwordService.DeriveKerberosKeys(principalName, newPassword, domainDnsUpper);
+        machine.KerberosKeys = newKeys
+            .Select(k => $"{k.EncryptionType}:{Convert.ToBase64String(k.KeyValue)}")
+            .ToList();
 
-        // Verify hash changed
-        Assert.NotEqual(oldHash, machine.NTHash);
-        Assert.Equal(32, machine.NTHash.Length);
+        // Verify keys changed
+        Assert.Equal(2, machine.KerberosKeys.Count);
+        Assert.NotEqual(oldKeys[0], machine.KerberosKeys[0]);
     }
 
     [Fact]
@@ -401,11 +387,7 @@ public class DomainJoinTests
         // Simulate the NRPC password rotation logic from NrpcOperations.NetrServerPasswordSet2Async
         var newPassword = "N3wR0tatedP@ss!456";
 
-        // Step 1: Compute NT hash (same as NrpcOperations does)
-        var newNtHash = _passwordService.ComputeNTHash(newPassword);
-        machine.NTHash = Convert.ToHexString(newNtHash);
-
-        // Step 2: Derive Kerberos keys (the critical fix)
+        // Derive Kerberos keys
         var principalName = machine.UserPrincipalName ?? machine.SAMAccountName ?? MachineAccountName;
         var domainDnsUpper = DomainDns.ToUpperInvariant();
         var kerberosKeys = _passwordService.DeriveKerberosKeys(principalName, newPassword, domainDnsUpper);
@@ -416,13 +398,12 @@ public class DomainJoinTests
 
         // Verify Kerberos keys were generated (this is the bug fix validation)
         Assert.NotEmpty(machine.KerberosKeys);
-        Assert.Equal(3, machine.KerberosKeys.Count);
+        Assert.Equal(2, machine.KerberosKeys.Count);
 
         // Verify each key type is present
         var keyTypes = machine.KerberosKeys.Select(k => k.Split(':')[0]).ToList();
         Assert.Contains("18", keyTypes);  // AES256
         Assert.Contains("17", keyTypes);  // AES128
-        Assert.Contains("23", keyTypes);  // RC4
 
         // Verify AES256 key is 32 bytes
         var aes256 = machine.KerberosKeys.First(k => k.StartsWith("18:"));
@@ -556,13 +537,11 @@ public class DomainJoinTests
         Assert.Equal(515, created.PrimaryGroupId);
         Assert.Contains("CN=Computers", created.DistinguishedName);
 
-        // ── Step 2: Set password (NT hash + Kerberos keys) ──
+        // ── Step 2: Set password (Kerberos keys) ──
         await _passwordService.SetPasswordAsync(TenantId, created.DistinguishedName, MachinePassword);
         var withPassword = await _store.GetByDnAsync(TenantId, created.DistinguishedName);
         Assert.NotNull(withPassword);
-        Assert.NotNull(withPassword.NTHash);
-        Assert.Equal(32, withPassword.NTHash.Length);
-        Assert.Equal(3, withPassword.KerberosKeys.Count);
+        Assert.Equal(2, withPassword.KerberosKeys.Count);
         Assert.True(withPassword.PwdLastSet > 0, "pwdLastSet must be updated after password set");
 
         // ── Step 3: Enable account (remove ACCOUNTDISABLE) ──
@@ -601,7 +580,6 @@ public class DomainJoinTests
         Assert.Equal(515, finalAccount.PrimaryGroupId);
 
         // Password set
-        Assert.NotNull(finalAccount.NTHash);
         Assert.NotEmpty(finalAccount.KerberosKeys);
 
         // Account enabled

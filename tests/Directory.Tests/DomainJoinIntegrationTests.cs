@@ -113,7 +113,6 @@ public class AdTestHost : IAsyncLifetime
         builder.Services.AddSingleton<SchemaModificationService>();
         builder.Services.AddSingleton<PasswordService>();
         builder.Services.AddSingleton<IPasswordPolicy>(sp => sp.GetRequiredService<PasswordService>());
-        builder.Services.AddSingleton<NtlmAuthenticator>();
         builder.Services.AddSingleton<IUserAccountControlService, UserAccountControlService>();
         builder.Services.AddSingleton<IAccessControlService, AccessControlService>();
         builder.Services.AddSingleton<GroupMembershipMaterializer>();
@@ -125,7 +124,6 @@ public class AdTestHost : IAsyncLifetime
         // APDS
         builder.Services.AddSingleton<AccountRestrictions>();
         builder.Services.AddSingleton<ApdsLogonProcessor>();
-        builder.Services.AddSingleton<NtlmPassThrough>();
         builder.Services.AddSingleton<PacValidation>();
         builder.Services.AddSingleton<DigestValidation>();
 

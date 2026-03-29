@@ -11,7 +11,7 @@ namespace Directory.Tests;
 
 /// <summary>
 /// Tests the complete interactive logon flow: Kerberos PAC generation,
-/// NTLM password validation, and post-logon field verification.
+/// password validation, and post-logon field verification.
 /// </summary>
 public class InteractiveLogonTests
 {
@@ -91,11 +91,11 @@ public class InteractiveLogonTests
     }
 
     // ════════════════════════════════════════════════════════════════
-    //  NTLM Path
+    //  Password Validation Path
     // ════════════════════════════════════════════════════════════════
 
     [Fact]
-    public async Task NtlmPath_PasswordValidates()
+    public async Task PasswordValidation_CorrectPasswordSucceeds()
     {
         var user = await CreateAndStoreTestUser("jdoe", 1001);
         await _passwordService.SetPasswordAsync(TenantId, user.DistinguishedName, TestPassword);
@@ -107,7 +107,7 @@ public class InteractiveLogonTests
     }
 
     [Fact]
-    public async Task NtlmPath_WrongPasswordFails()
+    public async Task PasswordValidation_WrongPasswordFails()
     {
         var user = await CreateAndStoreTestUser("jdoe", 1001);
         await _passwordService.SetPasswordAsync(TenantId, user.DistinguishedName, TestPassword);
@@ -116,15 +116,6 @@ public class InteractiveLogonTests
             TenantId, user.DistinguishedName, "WrongPassword123!");
 
         Assert.False(result, "Wrong password should not validate");
-    }
-
-    [Fact]
-    public void NtlmPath_DifferentPasswordProducesDifferentHash()
-    {
-        var hash1 = _passwordService.ComputeNTHash(TestPassword);
-        var hash2 = _passwordService.ComputeNTHash("DifferentP@ss99!");
-
-        Assert.NotEqual(hash1, hash2);
     }
 
     // ════════════════════════════════════════════════════════════════
@@ -185,7 +176,7 @@ public class InteractiveLogonTests
         await _passwordService.SetPasswordAsync(TenantId, user.DistinguishedName, TestPassword);
         var storedUser = await _store.GetByDnAsync(TenantId, user.DistinguishedName);
         Assert.NotNull(storedUser);
-        Assert.NotNull(storedUser.NTHash);
+        Assert.NotEmpty(storedUser.KerberosKeys);
 
         // Step 3: Add group membership
         var group = new DirectoryObject
@@ -202,7 +193,7 @@ public class InteractiveLogonTests
         _store.Add(group);
         storedUser.MemberOf.Add("CN=Developers,OU=Groups,DC=corp,DC=com");
 
-        // Step 4: Validate password (NTLM path)
+        // Step 4: Validate password (Kerberos key comparison)
         var passwordValid = await _passwordService.ValidatePasswordAsync(
             TenantId, storedUser.DistinguishedName, TestPassword);
         Assert.True(passwordValid, "Password must validate");

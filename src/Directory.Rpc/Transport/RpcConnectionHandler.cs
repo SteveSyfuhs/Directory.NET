@@ -1,18 +1,15 @@
 using System.Buffers.Binary;
 using System.Net.Sockets;
-using System.Security.Cryptography;
-using System.Text;
 using Directory.Rpc.Dispatch;
 using Directory.Rpc.Protocol;
-using Directory.Security;
 using Microsoft.Extensions.Logging;
 
 namespace Directory.Rpc.Transport;
 
 /// <summary>
 /// Handles a single RPC client connection, processing PDUs in a loop until
-/// the connection is closed. Manages bind negotiation, NTLM authentication,
-/// and request dispatch.
+/// the connection is closed. Manages bind negotiation and request dispatch.
+/// NTLM authentication is rejected; Kerberos authentication is required.
 /// </summary>
 public class RpcConnectionHandler
 {
@@ -20,21 +17,18 @@ public class RpcConnectionHandler
     private readonly RpcInterfaceDispatcher _dispatcher;
     private readonly RpcServerOptions _options;
     private readonly ILogger _logger;
-    private readonly NtlmAuthenticator _ntlmAuth;
     private readonly RpcConnectionState _state;
 
     public RpcConnectionHandler(
         Socket socket,
         RpcInterfaceDispatcher dispatcher,
         RpcServerOptions options,
-        ILogger logger,
-        NtlmAuthenticator ntlmAuth)
+        ILogger logger)
     {
         _socket = socket;
         _dispatcher = dispatcher;
         _options = options;
         _logger = logger;
-        _ntlmAuth = ntlmAuth;
 
         _state = new RpcConnectionState
         {
@@ -90,7 +84,7 @@ public class RpcConnectionHandler
                 {
                     RpcConstants.PTypeBind => WrapSingle(await HandleBindAsync(pdu, header)),
                     RpcConstants.PTypeAlterContext => WrapSingle(await HandleAlterContextAsync(pdu, header)),
-                    RpcConstants.PTypeAuth3 => WrapSingle(await HandleAuth3Async(pdu, header)),
+                    RpcConstants.PTypeAuth3 => WrapSingle(HandleAuth3Rejected(pdu, header)),
                     RpcConstants.PTypeRequest => await HandleRequestAsync(pdu, header, ct),
                     _ => WrapSingle(HandleUnknown(header)),
                 };
@@ -125,12 +119,11 @@ public class RpcConnectionHandler
 
         var results = NegotiateContexts(bindData.Contexts);
 
-        // Check for auth verifier (NTLM negotiate)
-        byte[] authResponseData = null;
+        // Check for auth verifier — reject NTLM, Kerberos is required
         var authVerifier = PduParser.ParseAuthVerifier(pdu, header.AuthLength);
         if (authVerifier != null)
         {
-            authResponseData = await ProcessAuthBindAsync(authVerifier);
+            RejectNtlmAuth(authVerifier);
         }
 
         _logger.LogDebug(
@@ -146,7 +139,7 @@ public class RpcConnectionHandler
             _state.AssocGroupId,
             results,
             (ushort)_options.ServicePort,
-            authResponseData);
+            authData: null);
     }
 
     private async Task<byte[]> HandleAlterContextAsync(byte[] pdu, RpcPduHeader header)
@@ -154,28 +147,39 @@ public class RpcConnectionHandler
         var bindData = PduParser.ParseAlterContext(pdu);
         var results = NegotiateContexts(bindData.Contexts);
 
-        byte[] authResponseData = null;
         var authVerifier = PduParser.ParseAuthVerifier(pdu, header.AuthLength);
         if (authVerifier != null)
         {
-            authResponseData = await ProcessAuthBindAsync(authVerifier);
+            RejectNtlmAuth(authVerifier);
         }
 
         _logger.LogDebug("AlterContext from {Remote}: {ContextCount} contexts", _state.RemoteEndPoint, bindData.Contexts.Length);
 
-        return PduBuilder.BuildAlterContextResp(header.CallId, results, authResponseData);
+        return PduBuilder.BuildAlterContextResp(header.CallId, results, authData: null);
     }
 
-    private async Task<byte[]> HandleAuth3Async(byte[] pdu, RpcPduHeader header)
+    private byte[] HandleAuth3Rejected(byte[] pdu, RpcPduHeader header)
     {
-        var authVerifier = PduParser.ParseAuth3(pdu, header.AuthLength);
-        if (authVerifier != null)
-        {
-            await ProcessAuthType3Async(authVerifier);
-        }
+        _logger.LogWarning(
+            "NTLM Auth3 rejected from {Remote} — Kerberos authentication is required. NTLM is not supported.",
+            _state.RemoteEndPoint);
 
         // Auth3 has no response PDU
         return null;
+    }
+
+    /// <summary>
+    /// Rejects NTLM authentication attempts and logs that Kerberos is required.
+    /// </summary>
+    private void RejectNtlmAuth(AuthVerifier auth)
+    {
+        if (auth.AuthType == RpcConstants.AuthTypeNtlm)
+        {
+            _logger.LogWarning(
+                "NTLM authentication rejected from {Remote} — Kerberos authentication is required. NTLM is not supported.",
+                _state.RemoteEndPoint);
+            _state.AuthState = RpcAuthState.Anonymous;
+        }
     }
 
     private async Task<byte[][]> HandleRequestAsync(byte[] pdu, RpcPduHeader header, CancellationToken ct)
@@ -407,310 +411,6 @@ public class RpcConnectionHandler
         }
 
         return results;
-    }
-
-    /// <summary>
-    /// Processes auth data from a Bind or AlterContext PDU.
-    /// For NTLM Type 1 (Negotiate), generates a Type 2 (Challenge) response.
-    /// </summary>
-    private async Task<byte[]> ProcessAuthBindAsync(AuthVerifier auth)
-    {
-        if (auth.AuthType == RpcConstants.AuthTypeNtlm)
-        {
-            var credentials = auth.Credentials.Span;
-
-            // Check if this is an NTLM Type 1 (Negotiate) message
-            // NTLMSSP signature followed by type indicator
-            if (credentials.Length >= 12 && IsNtlmNegotiate(credentials))
-            {
-                // Generate NTLM Type 2 (Challenge) message
-                var challenge = _ntlmAuth.GenerateChallenge();
-                _state.NtlmChallenge = challenge;
-                _state.AuthState = RpcAuthState.NtlmNegotiating;
-
-                return BuildNtlmChallengeMessage(challenge);
-            }
-
-            // Check if this is an NTLM Type 3 (Authenticate) message
-            if (credentials.Length >= 12 && IsNtlmAuthenticate(credentials))
-            {
-                await ProcessNtlmType3Async(credentials.ToArray());
-                return null; // No auth data in response for Type 3 in alter context
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Processes an NTLM Type 3 (Authenticate) message from an Auth3 PDU.
-    /// </summary>
-    private async Task ProcessAuthType3Async(AuthVerifier auth)
-    {
-        if (auth.AuthType == RpcConstants.AuthTypeNtlm)
-        {
-            var credentials = auth.Credentials.Span;
-            if (credentials.Length >= 12 && IsNtlmAuthenticate(credentials))
-            {
-                await ProcessNtlmType3Async(credentials.ToArray());
-            }
-        }
-    }
-
-    private async Task ProcessNtlmType3Async(ReadOnlyMemory<byte> ntlmMessageMem)
-    {
-        // Parse NTLM Type 3 message to extract username, domain, and NTLMv2 response
-        // Layout: "NTLMSSP\0" (8) + type (4) + field descriptors
-        try
-        {
-            var ntlmMessage = ntlmMessageMem.Span;
-
-            if (ntlmMessage.Length < 72)
-            {
-                _logger.LogWarning("NTLM Type 3 message too short");
-                return;
-            }
-
-            // LM response: length at bytes 12-13, offset at bytes 16-19
-            ushort lmLen = BinaryPrimitives.ReadUInt16LittleEndian(ntlmMessage.Slice(12));
-            uint lmOffset = BinaryPrimitives.ReadUInt32LittleEndian(ntlmMessage.Slice(16));
-
-            // NT response: length at bytes 20-21, offset at bytes 24-27
-            ushort ntLen = BinaryPrimitives.ReadUInt16LittleEndian(ntlmMessage.Slice(20));
-            uint ntOffset = BinaryPrimitives.ReadUInt32LittleEndian(ntlmMessage.Slice(24));
-
-            // Domain name: length at bytes 28-29, offset at bytes 32-35
-            ushort domainLen = BinaryPrimitives.ReadUInt16LittleEndian(ntlmMessage.Slice(28));
-            uint domainOffset = BinaryPrimitives.ReadUInt32LittleEndian(ntlmMessage.Slice(32));
-
-            // User name: length at bytes 36-37, offset at bytes 40-43
-            ushort userLen = BinaryPrimitives.ReadUInt16LittleEndian(ntlmMessage.Slice(36));
-            uint userOffset = BinaryPrimitives.ReadUInt32LittleEndian(ntlmMessage.Slice(40));
-
-            string username = "";
-            if (userLen > 0 && userOffset + userLen <= ntlmMessage.Length)
-            {
-                username = Encoding.Unicode.GetString(ntlmMessage.Slice((int)userOffset, userLen));
-            }
-
-            string domain = "";
-            if (domainLen > 0 && domainOffset + domainLen <= ntlmMessage.Length)
-            {
-                domain = Encoding.Unicode.GetString(ntlmMessage.Slice((int)domainOffset, domainLen));
-            }
-
-            // Extract NT response
-            byte[] ntResponse = Array.Empty<byte>();
-            if (ntLen > 0 && ntOffset + ntLen <= ntlmMessage.Length)
-            {
-                ntResponse = ntlmMessage.Slice((int)ntOffset, ntLen).ToArray();
-            }
-
-            // Validate the NTLMv2 response
-            if (ntResponse.Length < 16 || _state.NtlmChallenge is null)
-            {
-                _logger.LogWarning(
-                    "NTLM Type 3 validation failed for {Domain}\\{User}: missing NT response or server challenge",
-                    domain, username);
-                _state.AuthState = RpcAuthState.Anonymous;
-                return;
-            }
-
-            // NTLMv2 response structure: first 16 bytes = NTProofStr (HMAC), rest = client blob
-            var clientBlob = ntResponse[16..];
-
-            bool valid = await _ntlmAuth.ValidateNtlmv2ResponseAsync(
-                _options.TenantId,
-                _options.DomainDn,
-                username,
-                _state.NtlmChallenge,
-                ntResponse,
-                clientBlob);
-
-            if (!valid)
-            {
-                _logger.LogWarning(
-                    "NTLM authentication failed for {Domain}\\{User} from {Remote}: NTLMv2 validation rejected",
-                    domain, username, _state.RemoteEndPoint);
-                _state.AuthState = RpcAuthState.Anonymous;
-                return;
-            }
-
-            // Compute session key for signing/sealing:
-            // SessionBaseKey = HMAC_MD5(NTLMv2Hash, NTProofStr)
-            // We recompute NTLMv2Hash here for the session key derivation.
-            var ntProofStr = ntResponse[..16];
-            var userNtHash = await GetUserNtHashAsync(username);
-            if (userNtHash is not null)
-            {
-                var identityBytes = Encoding.Unicode.GetBytes(username.ToUpperInvariant() + domain);
-                byte[] ntlmv2Hash;
-                using (var hmac = new System.Security.Cryptography.HMACMD5(userNtHash))
-                {
-                    ntlmv2Hash = hmac.ComputeHash(identityBytes);
-                }
-                using (var hmac = new System.Security.Cryptography.HMACMD5(ntlmv2Hash))
-                {
-                    _state.SessionKey = hmac.ComputeHash(ntProofStr);
-                }
-            }
-
-            _state.AuthenticatedUser = username;
-            _state.AuthState = RpcAuthState.Authenticated;
-
-            _logger.LogInformation(
-                "NTLM authentication succeeded for {Domain}\\{User} from {Remote}",
-                domain, username, _state.RemoteEndPoint);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to parse or validate NTLM Type 3 message");
-            _state.AuthState = RpcAuthState.Anonymous;
-        }
-    }
-
-    /// <summary>
-    /// Retrieves the NT hash for a user from the directory store via the authenticator.
-    /// Returns null if the user is not found.
-    /// </summary>
-    private async Task<byte[]> GetUserNtHashAsync(string username)
-    {
-        try
-        {
-            var user = await _ntlmAuth.GetUserNtHashAsync(_options.TenantId, _options.DomainDn, username);
-            return user;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Builds an NTLM Type 2 (Challenge) message with the given 8-byte server challenge.
-    /// Includes proper TargetInfo AV_PAIR blocks per MS-NLMP section 2.2.1.2.
-    /// </summary>
-    private byte[] BuildNtlmChallengeMessage(byte[] challenge)
-    {
-        // Build TargetInfo AV_PAIR structure first so we know its length
-        var targetInfo = BuildTargetInfo();
-
-        using var ms = new MemoryStream();
-
-        // Signature: "NTLMSSP\0"
-        ms.Write("NTLMSSP\0"u8);
-
-        // Type: 2 (Challenge)
-        Span<byte> buf4 = stackalloc byte[4];
-        BinaryPrimitives.WriteUInt32LittleEndian(buf4, 2);
-        ms.Write(buf4);
-
-        // Target name = NetBIOS domain name
-        string targetName = _options.NetBiosDomainName;
-        byte[] targetNameBytes = Encoding.Unicode.GetBytes(targetName);
-
-        // TargetNameLen + TargetNameMaxLen
-        Span<byte> buf2 = stackalloc byte[2];
-        BinaryPrimitives.WriteUInt16LittleEndian(buf2, (ushort)targetNameBytes.Length);
-        ms.Write(buf2); // Len
-        ms.Write(buf2); // MaxLen
-
-        // TargetNameOffset — the payload area starts after the fixed 56-byte header
-        uint payloadOffset = 56;
-        BinaryPrimitives.WriteUInt32LittleEndian(buf4, payloadOffset);
-        ms.Write(buf4);
-
-        // Negotiate flags per MS-NLMP:
-        // NTLMSSP_NEGOTIATE_UNICODE (0x01) | NTLMSSP_NEGOTIATE_NTLM (0x200) |
-        // NTLMSSP_TARGET_TYPE_DOMAIN (0x10000) | NTLMSSP_NEGOTIATE_TARGET_INFO (0x800000) |
-        // NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY (0x80000) | NTLMSSP_NEGOTIATE_ALWAYS_SIGN (0x8000)
-        uint flags = 0x00898233;
-        BinaryPrimitives.WriteUInt32LittleEndian(buf4, flags);
-        ms.Write(buf4);
-
-        // Server challenge (8 bytes)
-        ms.Write(challenge);
-
-        // Reserved (8 bytes)
-        ms.Write(new byte[8]);
-
-        // TargetInfoLen + TargetInfoMaxLen
-        BinaryPrimitives.WriteUInt16LittleEndian(buf2, (ushort)targetInfo.Length);
-        ms.Write(buf2); // Len
-        ms.Write(buf2); // MaxLen
-
-        // TargetInfoOffset
-        uint targetInfoOffset = payloadOffset + (uint)targetNameBytes.Length;
-        BinaryPrimitives.WriteUInt32LittleEndian(buf4, targetInfoOffset);
-        ms.Write(buf4);
-
-        // Payload: Target name
-        ms.Write(targetNameBytes);
-
-        // Payload: TargetInfo AV_PAIRs
-        ms.Write(targetInfo);
-
-        return ms.ToArray();
-    }
-
-    /// <summary>
-    /// Builds the TargetInfo AV_PAIR sequence per MS-NLMP section 2.2.2.1.
-    /// Contains domain name, server name, DNS domain, DNS server FQDN, and timestamp.
-    /// </summary>
-    private byte[] BuildTargetInfo()
-    {
-        using var ms = new MemoryStream();
-
-        // MsvAvNbDomainName (type 2) — NetBIOS domain name
-        WriteAvPair(ms, 0x0002, Encoding.Unicode.GetBytes(_options.NetBiosDomainName));
-
-        // MsvAvNbComputerName (type 1) — NetBIOS computer name
-        WriteAvPair(ms, 0x0001, Encoding.Unicode.GetBytes(_options.ServerName));
-
-        // MsvAvDnsDomainName (type 4) — DNS domain name
-        WriteAvPair(ms, 0x0004, Encoding.Unicode.GetBytes(_options.DnsDomainName));
-
-        // MsvAvDnsComputerName (type 3) — DNS server FQDN
-        WriteAvPair(ms, 0x0003, Encoding.Unicode.GetBytes(_options.ServerFqdn));
-
-        // MsvAvTimestamp (type 7) — FILETIME (8 bytes, 100-nanosecond intervals since Jan 1 1601)
-        var timestamp = new byte[8];
-        BinaryPrimitives.WriteInt64LittleEndian(timestamp, DateTime.UtcNow.ToFileTimeUtc());
-        WriteAvPair(ms, 0x0007, timestamp);
-
-        // MsvAvEOL (type 0) — terminator
-        WriteAvPair(ms, 0x0000, Array.Empty<byte>());
-
-        return ms.ToArray();
-    }
-
-    private static void WriteAvPair(MemoryStream ms, ushort avId, byte[] avValue)
-    {
-        Span<byte> buf2 = stackalloc byte[2];
-        BinaryPrimitives.WriteUInt16LittleEndian(buf2, avId);
-        ms.Write(buf2);
-        BinaryPrimitives.WriteUInt16LittleEndian(buf2, (ushort)avValue.Length);
-        ms.Write(buf2);
-        if (avValue.Length > 0)
-            ms.Write(avValue);
-    }
-
-    private static bool IsNtlmNegotiate(ReadOnlySpan<byte> data)
-    {
-        // "NTLMSSP\0" followed by type 1
-        return data.Length >= 12 &&
-               data[0] == 'N' && data[1] == 'T' && data[2] == 'L' && data[3] == 'M' &&
-               data[4] == 'S' && data[5] == 'S' && data[6] == 'P' && data[7] == 0 &&
-               BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(8)) == 1;
-    }
-
-    private static bool IsNtlmAuthenticate(ReadOnlySpan<byte> data)
-    {
-        // "NTLMSSP\0" followed by type 3
-        return data.Length >= 12 &&
-               data[0] == 'N' && data[1] == 'T' && data[2] == 'L' && data[3] == 'M' &&
-               data[4] == 'S' && data[5] == 'S' && data[6] == 'P' && data[7] == 0 &&
-               BinaryPrimitives.ReadUInt32LittleEndian(data.Slice(8)) == 3;
     }
 
     /// <summary>

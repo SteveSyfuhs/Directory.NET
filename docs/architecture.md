@@ -93,7 +93,7 @@ Client
     ▼
 Directory.Kerberos — KerberosServer (built on Kerberos.NET)
     │
-    ├── Decrypt PA-ENC-TIMESTAMP with principal's AES/RC4 key
+    ├── Decrypt PA-ENC-TIMESTAMP with principal's AES key
     │       └── CosmosDirectoryStore.FindPrincipalAsync(upn)
     │               └── PasswordService.GetKerberosKeys(principal)
     │
@@ -119,26 +119,42 @@ Directory.Kerberos — KerberosServer
 
 ## Password & Key Derivation
 
-NT hash computation and Kerberos key derivation are handled by `Directory.Security.PasswordService`:
+Kerberos key derivation is handled by `Directory.Security.PasswordService`:
 
 ```
-PasswordService.ComputeNTHash(password)
-    │
-    └── Md4.ComputeNTHash(password)
-            │
-            └── MD4( UTF-16LE(password) )    ← Managed RFC 1320 implementation
-                                                (cross-platform, no OS crypto dependency)
-
 PasswordService.DeriveKerberosKeys(principal, password, realm)
     │
     ├── AES256-CTS-HMAC-SHA1-96  ──► Kerberos.NET  KerberosKey.GetKey()
-    ├── AES128-CTS-HMAC-SHA1-96  ──► Kerberos.NET  KerberosKey.GetKey()
-    └── RC4-HMAC-NT              ──► Md4.ComputeNTHash(password)   ← managed MD4
+    └── AES128-CTS-HMAC-SHA1-96  ──► Kerberos.NET  KerberosKey.GetKey()
+
+PasswordService.ValidatePasswordAsync(tenantId, dn, password)
+    │
+    ├── DeriveKerberosKeys(principal, password, realm)
+    ├── Extract candidate AES256 key
+    ├── Extract stored AES256 key from DirectoryObject.KerberosKeys
+    └── CryptographicOperations.FixedTimeEquals(candidate, stored)
 ```
 
-The managed MD4 implementation (`Directory.Security.Md4`) ensures NT hash computation works
-identically on Windows and Linux. Kerberos.NET's `LinuxCryptoPal` does not provide an MD4
-implementation, so the RC4-HMAC key path bypasses Kerberos.NET and computes the hash directly.
+**Security design**: NTLM, MD4, RC4-HMAC, and NT hash are intentionally excluded. All
+password-based authentication derives AES Kerberos keys and compares them. This eliminates
+the entire class of NTLM relay, pass-the-hash, and downgrade attacks. The `NTHash` field on
+`DirectoryObject` is retained for schema compatibility but is always `null`.
+
+The Netlogon secure channel (MS-NRPC) is AES-only — legacy DES and RC4 paths are rejected
+with `NotSupportedException`. LDAP SASL binds only accept Kerberos GSSAPI; NTLMSSP tokens
+are rejected with a clear error message directing clients to use Kerberos.
+
+## Case-Insensitive Query Handling
+
+LDAP is a case-insensitive protocol for attribute names and most string attribute values.
+Directory.NET enforces case-insensitive matching at multiple levels:
+
+- **Cosmos DB SQL queries**: Equality, substring, and comparison filters wrap both sides in
+  `LOWER()` for string attributes. Binary attributes (objectGUID, objectSid, etc.) are excluded.
+- **Lookup queries**: `GetBySamAccountNameAsync`, `GetByUpnAsync`, and `GetByServicePrincipalNameAsync`
+  use `LOWER()` comparison in their WHERE clauses.
+- **DN lookups**: Distinguished names are normalized to lowercase before storage and query.
+- **Attribute dictionaries**: All in-memory attribute name lookups use `StringComparer.OrdinalIgnoreCase`.
 
 ---
 

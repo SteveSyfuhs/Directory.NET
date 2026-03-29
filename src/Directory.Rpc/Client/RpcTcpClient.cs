@@ -7,7 +7,8 @@ namespace Directory.Rpc.Client;
 
 /// <summary>
 /// A DCE/RPC client over TCP that handles the full connection lifecycle:
-/// connect, bind with NTLM authentication, and request/response exchange.
+/// connect, bind with authentication, and request/response exchange.
+/// NTLM authentication has been removed; Kerberos is required for authenticated binds.
 /// </summary>
 public class RpcTcpClient : IAsyncDisposable
 {
@@ -17,7 +18,6 @@ public class RpcTcpClient : IAsyncDisposable
     private uint _callId;
     private ushort _maxXmitFrag = 4280;
     private ushort _maxRecvFrag = 4280;
-    private NtlmSessionSecurity _sessionSecurity;
 
     public RpcTcpClient(ILogger logger)
     {
@@ -30,12 +30,12 @@ public class RpcTcpClient : IAsyncDisposable
     public bool IsConnected => _tcpClient?.Connected == true;
 
     /// <summary>
-    /// Whether NTLM authentication has completed successfully.
+    /// Whether authentication has completed successfully.
     /// </summary>
     public bool IsAuthenticated { get; private set; }
 
     /// <summary>
-    /// The NTLM session key derived during authentication, used for signing/sealing.
+    /// The session key derived during authentication, used for signing/sealing.
     /// </summary>
     public byte[] SessionKey { get; private set; } = [];
 
@@ -66,81 +66,23 @@ public class RpcTcpClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// Binds to an RPC interface with NTLM authentication.
-    /// Sends BIND (with Type 1) -> receives BIND_ACK (with Type 2) -> sends AUTH3 (with Type 3).
+    /// Binds to an RPC interface with authentication.
+    /// NTLM authentication has been removed. Use Kerberos authentication instead.
     /// </summary>
-    public async Task BindAsync(
+    public Task BindAsync(
         Guid interfaceId, ushort majorVersion, ushort minorVersion,
-        string username, string domain, byte[] ntHash,
+        string username, string domain, string password,
         CancellationToken ct = default)
     {
-        EnsureConnected();
+        // NTLM authentication has been removed. Kerberos authentication is required.
+        // This method signature is preserved for API compatibility during the transition.
+        _logger.LogError(
+            "NTLM authentication is no longer supported for RPC binds. Kerberos authentication is required. " +
+            "Attempted bind to interface {InterfaceId} as {Domain}\\{Username}",
+            interfaceId, domain, username);
 
-        var ntlmBuilder = new NtlmClientMessageBuilder();
-
-        // Step 1: Build NTLM Type 1 (Negotiate) message and wrap in SPNEGO
-        byte[] type1Message = ntlmBuilder.BuildNegotiateMessage();
-        byte[] spnegoInit = SpnegoTokenBuilder.WrapNtlmNegotiate(type1Message);
-        _logger.LogDebug("Built NTLM Type 1 negotiate message ({Length} bytes), SPNEGO wrapped ({SpnegoLen} bytes)",
-            type1Message.Length, spnegoInit.Length);
-
-        // Step 2: Build and send BIND PDU with SPNEGO-wrapped Type 1 in auth verifier
-        uint callId = ++_callId;
-        byte[] bindPdu = BuildBindPdu(callId, interfaceId, majorVersion, minorVersion, spnegoInit);
-        await SendPduAsync(bindPdu, ct);
-        _logger.LogDebug("Sent BIND PDU (callId={CallId}, {Length} bytes)", callId, bindPdu.Length);
-
-        // Step 3: Receive BIND_ACK
-        byte[] bindAckPdu = await ReceivePduAsync(ct);
-        var bindAckHeader = RpcPduHeader.Read(bindAckPdu);
-
-        if (bindAckHeader.PacketType != RpcConstants.PTypeBindAck)
-        {
-            throw new InvalidOperationException(
-                $"Expected BIND_ACK (type {RpcConstants.PTypeBindAck}), got type {bindAckHeader.PacketType}.");
-        }
-
-        _logger.LogDebug("Received BIND_ACK (callId={CallId}, fragLen={FragLen}, authLen={AuthLen})",
-            bindAckHeader.CallId, bindAckHeader.FragLength, bindAckHeader.AuthLength);
-
-        // Parse BIND_ACK to get max fragment sizes and context results
-        ParseBindAck(bindAckPdu, bindAckHeader);
-
-        // Extract SPNEGO token from auth verifier and unwrap to get NTLM Type 2 (Challenge)
-        var authVerifier = PduParser.ParseAuthVerifier(bindAckPdu, bindAckHeader.AuthLength);
-        if (authVerifier is null)
-        {
-            throw new InvalidOperationException("BIND_ACK did not contain an auth verifier with SPNEGO token.");
-        }
-
-        byte[] spnegoChallenge = authVerifier.Credentials.ToArray();
-        byte[] type2Message = SpnegoTokenBuilder.UnwrapNtlmChallenge(spnegoChallenge);
-        _logger.LogDebug("Unwrapped SPNEGO to get NTLM Type 2 challenge ({Length} bytes)", type2Message.Length);
-
-        // Step 4: Parse the Type 2 to get server challenge
-        var (serverChallenge, negotiateFlags, targetName) = ntlmBuilder.ParseChallengeMessage(type2Message);
-        _logger.LogDebug("Server challenge received, target={TargetName}, flags=0x{Flags:X8}",
-            targetName ?? "(none)", negotiateFlags);
-
-        // Step 5: Build NTLM Type 3 (Authenticate) message
-        var (type3Message, sessionKey) = ntlmBuilder.BuildAuthenticateMessage(
-            username, domain, ntHash, serverChallenge, negotiateFlags);
-        _logger.LogDebug("Built NTLM Type 3 authenticate message ({Length} bytes)", type3Message.Length);
-
-        // Step 6: Wrap Type 3 in SPNEGO and send AUTH3 PDU
-        byte[] spnegoAuth = SpnegoTokenBuilder.WrapNtlmAuthenticate(type3Message);
-        byte[] auth3Pdu = BuildAuth3Pdu(callId, spnegoAuth);
-        await SendPduAsync(auth3Pdu, ct);
-        _logger.LogDebug("Sent AUTH3 PDU with SPNEGO-wrapped Type 3 ({Length} bytes)", auth3Pdu.Length);
-
-        // AUTH3 has no server response. Authentication is complete.
-        SessionKey = sessionKey;
-        IsAuthenticated = true;
-
-        // Create session security for signing/sealing subsequent PDUs
-        _sessionSecurity = new NtlmSessionSecurity(ntlmBuilder.ExportedSessionKey, ntlmBuilder.NegotiateFlags);
-        _logger.LogDebug("NTLM authentication complete. Session security initialized (authLevel={AuthLevel})",
-            AuthLevel);
+        throw new NotSupportedException(
+            "NTLM authentication has been removed. Kerberos authentication is required for authenticated RPC binds.");
     }
 
     /// <summary>
@@ -180,23 +122,20 @@ public class RpcTcpClient : IAsyncDisposable
         EnsureConnected();
 
         uint callId = ++_callId;
-        bool useAuth = _sessionSecurity is not null && IsAuthenticated;
 
         // Calculate maximum stub data per request fragment
         // Request PDU overhead: 16 (header) + 8 (allocHint + contextId + opnum) = 24 bytes
-        // If authenticated: + auth padding (up to 15) + auth verifier header (8) + signature (16) = up to 39 extra
         const int requestOverhead = RpcPduHeader.HeaderSize + 8;
-        const int authOverhead = 16 + 8 + 16; // max padding + auth header + NTLM signature
-        int maxStubPerFragment = _maxXmitFrag - requestOverhead - (useAuth ? authOverhead : 0);
+        int maxStubPerFragment = _maxXmitFrag - requestOverhead;
 
         if (stubData.Length <= maxStubPerFragment)
         {
             // Single fragment
-            byte[] requestPdu = BuildAuthenticatedRequestPdu(callId, ContextId, opnum, stubData,
+            byte[] requestPdu = BuildRequestPdu(callId, ContextId, opnum, stubData,
                 RpcConstants.PfcFirstFrag | RpcConstants.PfcLastFrag);
             await SendPduAsync(requestPdu, ct);
-            _logger.LogDebug("Sent REQUEST PDU (callId={CallId}, opnum={Opnum}, stubLen={StubLen}, auth={Auth})",
-                callId, opnum, stubData.Length, useAuth);
+            _logger.LogDebug("Sent REQUEST PDU (callId={CallId}, opnum={Opnum}, stubLen={StubLen})",
+                callId, opnum, stubData.Length);
         }
         else
         {
@@ -216,7 +155,7 @@ public class RpcTcpClient : IAsyncDisposable
                 byte[] chunk = new byte[chunkSize];
                 Array.Copy(stubData, offset, chunk, 0, chunkSize);
 
-                byte[] fragmentPdu = BuildAuthenticatedRequestPdu(callId, ContextId, opnum, chunk, flags);
+                byte[] fragmentPdu = BuildRequestPdu(callId, ContextId, opnum, chunk, flags);
                 await SendPduAsync(fragmentPdu, ct);
 
                 _logger.LogDebug(
@@ -262,58 +201,12 @@ public class RpcTcpClient : IAsyncDisposable
             int stubEnd = header.FragLength;
             byte[] responseStubData;
 
-            if (header.AuthLength > 0 && _sessionSecurity is not null)
+            if (header.AuthLength > 0)
             {
-                // Parse auth verifier to get signature and auth pad length
-                var respAuthVerifier = PduParser.ParseAuthVerifier(responsePdu, header.AuthLength);
-                if (respAuthVerifier is null)
-                {
-                    throw new InvalidOperationException("Response PDU missing expected auth verifier.");
-                }
-
-                // The authenticated region is stub_data + auth_pad (before the auth verifier header)
-                int authVerifierStart = header.FragLength - header.AuthLength - 8;
-                int authPadLen = respAuthVerifier.AuthPadLength;
-                int dataEnd = authVerifierStart - authPadLen;
-
-                if (dataEnd < stubStart)
-                    dataEnd = stubStart;
-
-                // Extract the stub + padding that was signed/sealed
-                int sealedLen = authVerifierStart - stubStart;
-                byte[] sealedData = new byte[sealedLen];
-                Array.Copy(responsePdu, stubStart, sealedData, 0, sealedLen);
-
-                byte[] signature = respAuthVerifier.Credentials.ToArray();
-
-                if (AuthLevel == RpcConstants.AuthLevelPrivacy)
-                {
-                    // Unseal (decrypt + verify)
-                    byte[] decrypted = _sessionSecurity.Unseal(sealedData, signature);
-                    // Strip auth padding from decrypted data
-                    int actualStubLen = decrypted.Length - authPadLen;
-                    responseStubData = new byte[actualStubLen];
-                    Array.Copy(decrypted, 0, responseStubData, 0, actualStubLen);
-                }
-                else
-                {
-                    // Verify signature only
-                    if (!_sessionSecurity.Verify(sealedData, signature))
-                    {
-                        throw new InvalidOperationException("Response PDU signature verification failed.");
-                    }
-                    int actualStubLen = sealedLen - authPadLen;
-                    responseStubData = new byte[actualStubLen];
-                    Array.Copy(sealedData, 0, responseStubData, 0, actualStubLen);
-                }
+                stubEnd -= (header.AuthLength + 8);
             }
-            else
-            {
-                if (header.AuthLength > 0)
-                {
-                    stubEnd -= (header.AuthLength + 8);
-                }
 
+            {
                 int len = stubEnd - stubStart;
                 responseStubData = len > 0 ? new byte[len] : [];
                 if (len > 0)
@@ -471,7 +364,7 @@ public class RpcTcpClient : IAsyncDisposable
     }
 
     /// <summary>
-    /// Builds a BIND PDU with an optional NTLM auth verifier.
+    /// Builds a BIND PDU with an optional auth verifier.
     /// </summary>
     private static byte[] BuildBindPdu(
         uint callId, Guid interfaceId, ushort majorVersion, ushort minorVersion,
@@ -514,7 +407,7 @@ public class RpcTcpClient : IAsyncDisposable
         WriteGuid(ms, RpcConstants.NdrSyntaxId);
         WriteUInt32(ms, RpcConstants.NdrSyntaxVersion);
 
-        // Auth verifier (if NTLM)
+        // Auth verifier (if present)
         ushort authLength = 0;
         if (authData is { Length: > 0 })
         {
@@ -539,46 +432,6 @@ public class RpcTcpClient : IAsyncDisposable
             VersionMajor = RpcConstants.VersionMajor,
             VersionMinor = RpcConstants.VersionMinor,
             PacketType = RpcConstants.PTypeBind,
-            PacketFlags = RpcConstants.PfcFirstFrag | RpcConstants.PfcLastFrag,
-            DataRepresentation = RpcPduHeader.LittleEndianDrep,
-            FragLength = (ushort)pdu.Length,
-            AuthLength = authLength,
-            CallId = callId,
-        };
-        header.Write(pdu.AsSpan());
-
-        return pdu;
-    }
-
-    /// <summary>
-    /// Builds an AUTH3 PDU with the NTLM Type 3 message in the auth verifier.
-    /// </summary>
-    private static byte[] BuildAuth3Pdu(uint callId, byte[] authData)
-    {
-        using var ms = new MemoryStream();
-
-        // Reserve header (16 bytes)
-        ms.Write(new byte[RpcPduHeader.HeaderSize]);
-
-        // Pad (4 bytes) — AUTH3 body is just padding before the auth verifier
-        WriteUInt32(ms, 0);
-
-        // Auth verifier header (8 bytes) + credentials — use SPNEGO auth type
-        ushort authLength = (ushort)authData.Length;
-        ms.WriteByte(RpcConstants.AuthTypeSpnego);    // auth_type (SPNEGO = 0x09)
-        ms.WriteByte(RpcConstants.AuthLevelConnect);  // auth_level
-        ms.WriteByte(0);                              // auth_pad_length
-        ms.WriteByte(0);                              // reserved
-        WriteUInt32(ms, 0);                           // auth_context_id
-        ms.Write(authData);
-
-        // Patch header
-        byte[] pdu = ms.ToArray();
-        var header = new RpcPduHeader
-        {
-            VersionMajor = RpcConstants.VersionMajor,
-            VersionMinor = RpcConstants.VersionMinor,
-            PacketType = RpcConstants.PTypeAuth3,
             PacketFlags = RpcConstants.PfcFirstFrag | RpcConstants.PfcLastFrag,
             DataRepresentation = RpcPduHeader.LittleEndianDrep,
             FragLength = (ushort)pdu.Length,
@@ -620,83 +473,6 @@ public class RpcTcpClient : IAsyncDisposable
             DataRepresentation = RpcPduHeader.LittleEndianDrep,
             FragLength = (ushort)pdu.Length,
             AuthLength = 0,
-            CallId = callId,
-        };
-        header.Write(pdu.AsSpan());
-
-        return pdu;
-    }
-
-    /// <summary>
-    /// Builds a REQUEST PDU with signing/sealing if session security is available.
-    /// For authenticated requests, the stub data is padded, signed/sealed, and an auth verifier is appended.
-    /// </summary>
-    private byte[] BuildAuthenticatedRequestPdu(
-        uint callId, ushort contextId, ushort opnum, byte[] stubData, byte flags)
-    {
-        if (_sessionSecurity is null || !IsAuthenticated)
-        {
-            // No authentication — use plain request
-            return BuildRequestPdu(callId, contextId, opnum, stubData, flags);
-        }
-
-        using var ms = new MemoryStream();
-
-        // Reserve header (16 bytes)
-        ms.Write(new byte[RpcPduHeader.HeaderSize]);
-
-        // Request body: allocHint (4), contextId (2), opnum (2)
-        WriteUInt32(ms, (uint)stubData.Length); // alloc_hint (original stub size)
-        WriteUInt16(ms, contextId);
-        WriteUInt16(ms, opnum);
-
-        // Calculate auth padding to align stub data to 16-byte boundary
-        int stubDataStart = (int)ms.Position;
-        int authPadLength = (16 - (stubData.Length % 16)) % 16;
-
-        // Build the data that will be signed/sealed: stub_data + auth_pad
-        byte[] dataToProtect = new byte[stubData.Length + authPadLength];
-        stubData.CopyTo(dataToProtect, 0);
-        // auth padding bytes are zeros (already default)
-
-        byte[] protectedData;
-        byte[] signature;
-
-        if (AuthLevel == RpcConstants.AuthLevelPrivacy)
-        {
-            // Seal: encrypt the stub data + padding, and produce signature
-            (protectedData, signature) = _sessionSecurity.Seal(dataToProtect);
-        }
-        else
-        {
-            // Sign only: stub data is plaintext, signature is computed
-            protectedData = dataToProtect;
-            signature = _sessionSecurity.Sign(dataToProtect);
-        }
-
-        // Write the protected (possibly encrypted) stub data + padding
-        ms.Write(protectedData);
-
-        // Auth verifier header (8 bytes) + NTLM signature (16 bytes)
-        ushort authLength = (ushort)signature.Length;
-        ms.WriteByte(RpcConstants.AuthTypeSpnego);   // auth_type
-        ms.WriteByte(AuthLevel);                      // auth_level
-        ms.WriteByte((byte)authPadLength);            // auth_pad_length
-        ms.WriteByte(0);                              // reserved
-        WriteUInt32(ms, 0);                           // auth_context_id
-        ms.Write(signature);
-
-        // Patch header
-        byte[] pdu = ms.ToArray();
-        var header = new RpcPduHeader
-        {
-            VersionMajor = RpcConstants.VersionMajor,
-            VersionMinor = RpcConstants.VersionMinor,
-            PacketType = RpcConstants.PTypeRequest,
-            PacketFlags = flags,
-            DataRepresentation = RpcPduHeader.LittleEndianDrep,
-            FragLength = (ushort)pdu.Length,
-            AuthLength = authLength,
             CallId = callId,
         };
         header.Write(pdu.AsSpan());
