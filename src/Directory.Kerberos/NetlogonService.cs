@@ -662,6 +662,7 @@ public class NetlogonService : IHostedService, IDisposable
         public const uint STATUS_ACCOUNT_DISABLED = 0xC0000072;
         public const uint STATUS_ACCOUNT_LOCKED_OUT = 0xC0000234;
         public const uint STATUS_INVALID_PARAMETER = 0xC000000D;
+        public const uint STATUS_NOT_SUPPORTED = 0xC00000BB;
     }
 
     private class NetlogonException : Exception
