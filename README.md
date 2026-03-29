@@ -6,7 +6,7 @@ All of this code is prompt driven. I have not written a single line and I haven'
 
 # Directory.NET
 
-A modern, cloud-native Active Directory-compatible directory service built on .NET 9 and Azure Cosmos DB.
+A modern, cloud-native Active Directory-compatible directory service built on .NET 10 and Azure Cosmos DB.
 
 Directory.NET implements the core AD DS protocols (LDAP v3, Kerberos v5, DNS, MS-RPC) with a
 cloud-native backend, replacing the traditional NTDS.dit file store with Azure Cosmos DB for
@@ -22,7 +22,7 @@ The solution is organised into 11 projects:
 |---|---|---|
 | `Directory.Core` | Library | Domain model, interfaces, caching abstractions, telemetry |
 | `Directory.Schema` | Library | AD schema definitions, attribute syntax validation, OID registry |
-| `Directory.Security` | Library | NTLM, Kerberos PAC, ACL/DACL enforcement, certificate authority, OAuth 2.0/OIDC, SAML 2.0, FIDO2, MFA, RADIUS, PAM |
+| `Directory.Security` | Library | NTLM, Kerberos PAC, ACL/DACL enforcement, certificate authority, OAuth 2.0/OIDC, SAML 2.0, FIDO2, MFA, RADIUS, PAM, managed MD4 implementation |
 | `Directory.CosmosDb` | Library | Azure Cosmos DB data access layer, change-feed replication consumer |
 | `Directory.Ldap` | Library | RFC 4511 LDAP v3 protocol implementation, filter evaluation, ASN.1 BER codec |
 | `Directory.Kerberos` | Library | Kerberos v5 AS/TGS exchange, PAC generation, delegation support (built on Kerberos.NET) |
@@ -40,15 +40,15 @@ The test project lives under `tests/Directory.Tests`.
 
 | Layer | Technology |
 |---|---|
-| Runtime | .NET 9 |
+| Runtime | .NET 10 |
 | Data store | Azure Cosmos DB (SDK 3.x, NoSQL API) |
 | Kerberos | Kerberos.NET 4.x |
-| ASN.1 / BER | System.Formats.Asn1 9.x |
-| Async I/O | System.IO.Pipelines 9.x |
-| XML/SAML crypto | System.Security.Cryptography.Xml 9.x |
-| Observability | OpenTelemetry (traces + metrics → OTLP) |
+| ASN.1 / BER | System.Formats.Asn1 |
+| Async I/O | System.IO.Pipelines |
+| XML/SAML crypto | System.Security.Cryptography.Xml |
+| Observability | OpenTelemetry (traces + metrics via OTLP) |
 | Frontend framework | Vue 3 + Vite |
-| UI component library | PrimeVue |
+| UI component library | PrimeVue 4.x |
 | API documentation | Microsoft.AspNetCore.OpenApi + Scalar |
 | Serialisation | System.Text.Json (default) + Newtonsoft.Json (Cosmos SDK) |
 | Caching | IMemoryCache + IDistributedCache (Redis or in-memory) |
@@ -82,6 +82,8 @@ The test project lives under `tests/Directory.Tests`.
 - **Kerberos authentication**: AS/TGS with PAC generation, constrained delegation (S4U2Proxy),
   PKINIT (smart card), cross-realm trusts.
 - **Fine-grained password policies**: per-OU/per-group PSO objects (MS-ADTS 3.1.1.5.2).
+- **Cross-platform NT hash**: managed MD4 implementation (RFC 1320) for NT hash computation on
+  Windows and Linux without platform-specific crypto dependencies.
 - **Multi-factor authentication**: TOTP, FIDO2/WebAuthn, conditional risk-based MFA.
 - **Certificate Authority**: internal CA with auto-enrollment and template management.
 - **Group Managed Service Accounts** (gMSA): automated password rotation per MS-GMSAD.
@@ -98,7 +100,7 @@ The test project lives under `tests/Directory.Tests`.
 
 ## Prerequisites
 
-- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10)
 - [Node.js 20+](https://nodejs.org/) (for the Vue 3 management portal dev server)
 - [Azure Cosmos DB Emulator](https://learn.microsoft.com/azure/cosmos-db/local-emulator) (local
   development) **or** an Azure Cosmos DB account (NoSQL API)
@@ -112,8 +114,8 @@ The test project lives under `tests/Directory.Tests`.
 ### 1. Clone
 
 ```bash
-git clone https://github.com/your-org/directory.net.git
-cd directory.net
+git clone https://github.com/SteveSyfuhs/Directory.NET.git
+cd Directory.NET
 ```
 
 ### 2. Start the Cosmos DB Emulator
@@ -184,6 +186,31 @@ docker-compose up
 This starts the Cosmos DB Emulator, Redis, `directory-server`, and `directory-web` together.
 The management portal is available at `https://localhost:6001`.
 
+### Building Images Individually
+
+```bash
+docker build -f Dockerfile.web   -t directory-web:latest   .
+docker build -f Dockerfile.server -t directory-server:latest .
+```
+
+Both Dockerfiles use multi-stage builds with the .NET 10 SDK for the build stage. The web image
+uses `mcr.microsoft.com/dotnet/aspnet:10.0` as the runtime base and includes the Vue 3 SPA built
+by Node.js 20. The server image uses `mcr.microsoft.com/dotnet/runtime:10.0`.
+
+---
+
+## CI/CD
+
+GitHub Actions workflows are included:
+
+| Workflow | Trigger | Description |
+|---|---|---|
+| `build.yml` | Push to `main`/`develop`, PRs to `main` | Builds the solution, runs tests (Ubuntu + Windows matrix), type-checks the Vue frontend, uploads coverage |
+| `release.yml` | Tag push (`v*`) | Publishes self-contained binaries (Windows x64, Linux x64), builds the frontend, creates GitHub Release with archives, builds and pushes Docker images to GHCR |
+
+Docker images are published to `ghcr.io/stevesyfuhs/directory.net/web` and
+`ghcr.io/stevesyfuhs/directory.net/server` on every release tag.
+
 ---
 
 ## API Documentation
@@ -232,12 +259,7 @@ section separator, e.g. `CosmosDb__DatabaseName`):
 
 ### Docker
 
-Build and push individual images:
-
-```bash
-docker build -f Dockerfile.web   -t directory-web:latest   .
-docker build -f Dockerfile.server -t directory-server:latest .
-```
+See [Docker Quick Start](#docker-quick-start) above for building images.
 
 ### Kubernetes / Helm
 
@@ -293,6 +315,10 @@ dotnet build src/src.sln
 dotnet test tests/Directory.Tests/Directory.Tests.csproj
 ```
 
+Tests run on both Windows and Linux. The project includes a managed MD4 implementation
+(`Directory.Security.Md4`) so that NT hash computation works cross-platform without relying on
+the operating system's crypto libraries.
+
 ### Frontend dev server
 
 The Vue 3 SPA lives in `src/Directory.Web/ClientApp`. In development the ASP.NET Core server
@@ -312,16 +338,25 @@ dotnet run --project src/Directory.Web
 
 The `UseViteDevelopmentServer(port: 6173)` middleware in `Program.cs` handles the proxy.
 
+### Frontend type checking
+
+The Vue frontend uses TypeScript with PrimeVue 4.x components. To run the type checker:
+
+```bash
+cd src/Directory.Web/ClientApp
+npx vue-tsc --noEmit
+```
+
 ---
 
 ## Project Structure
 
 ```
-directory.net/
+Directory.NET/
 ├── src/
 │   ├── Directory.Core/          # Domain model, interfaces, caching, telemetry
 │   ├── Directory.Schema/        # AD schema, attribute syntax, OID registry
-│   ├── Directory.Security/      # Auth, ACL, CA, OAuth, SAML, FIDO2, MFA
+│   ├── Directory.Security/      # Auth, ACL, CA, OAuth, SAML, FIDO2, MFA, MD4
 │   ├── Directory.CosmosDb/      # Cosmos DB data access, change feed
 │   ├── Directory.Ldap/          # LDAP v3 protocol, BER codec, filter engine
 │   ├── Directory.Kerberos/      # Kerberos v5 AS/TGS, PAC, delegation
@@ -330,14 +365,20 @@ directory.net/
 │   ├── Directory.Replication/   # Multi-master replication engine
 │   ├── Directory.Server/        # Headless worker host (LDAP/Kerberos/DNS/RPC)
 │   └── Directory.Web/           # REST API + Vue 3 management portal
-│       └── ClientApp/           # Vue 3 + Vite + PrimeVue SPA
+│       └── ClientApp/           # Vue 3 + Vite + PrimeVue 4.x SPA
 ├── tests/
-│   └── Directory.Tests/         # Unit and integration tests
+│   └── Directory.Tests/         # Unit and integration tests (~987 tests)
 ├── docs/
 │   └── architecture.md          # Architecture deep-dive
-├── Dockerfile.web
-├── Dockerfile.server
+├── .github/
+│   └── workflows/
+│       ├── build.yml            # CI: build + test (Ubuntu & Windows matrix)
+│       └── release.yml          # CD: publish binaries + Docker images to GHCR
+├── Dockerfile.web               # Multi-stage Docker build for web portal
+├── Dockerfile.server            # Multi-stage Docker build for headless server
 ├── docker-compose.yml
+├── Directory.Build.props        # Shared MSBuild properties (target framework, etc.)
+├── LICENSE                      # MIT License
 └── README.md
 ```
 
@@ -345,4 +386,4 @@ directory.net/
 
 ## License
 
-*License placeholder — add your project license here (e.g., MIT, Apache 2.0, proprietary).*
+This project is licensed under the [MIT License](LICENSE).

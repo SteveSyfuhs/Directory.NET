@@ -93,7 +93,7 @@ Client
     ▼
 Directory.Kerberos — KerberosServer (built on Kerberos.NET)
     │
-    ├── Decrypt PA-ENC-TIMESTAMP with principal's DES/AES key
+    ├── Decrypt PA-ENC-TIMESTAMP with principal's AES/RC4 key
     │       └── CosmosDirectoryStore.FindPrincipalAsync(upn)
     │               └── PasswordService.GetKerberosKeys(principal)
     │
@@ -117,13 +117,38 @@ Directory.Kerberos — KerberosServer
 
 ---
 
+## Password & Key Derivation
+
+NT hash computation and Kerberos key derivation are handled by `Directory.Security.PasswordService`:
+
+```
+PasswordService.ComputeNTHash(password)
+    │
+    └── Md4.ComputeNTHash(password)
+            │
+            └── MD4( UTF-16LE(password) )    ← Managed RFC 1320 implementation
+                                                (cross-platform, no OS crypto dependency)
+
+PasswordService.DeriveKerberosKeys(principal, password, realm)
+    │
+    ├── AES256-CTS-HMAC-SHA1-96  ──► Kerberos.NET  KerberosKey.GetKey()
+    ├── AES128-CTS-HMAC-SHA1-96  ──► Kerberos.NET  KerberosKey.GetKey()
+    └── RC4-HMAC-NT              ──► Md4.ComputeNTHash(password)   ← managed MD4
+```
+
+The managed MD4 implementation (`Directory.Security.Md4`) ensures NT hash computation works
+identically on Windows and Linux. Kerberos.NET's `LinuxCryptoPal` does not provide an MD4
+implementation, so the RC4-HMAC key path bypasses Kerberos.NET and computes the hash directly.
+
+---
+
 ## Cosmos DB Data Model
 
 ### Containers
 
 | Container | Partition Key | Primary Content |
 |---|---|---|
-| `Entries` | `/partitionKey` (tenant/domain segment) | Directory entries (users, groups, computers, OUs, GPOs, …) |
+| `Entries` | `/partitionKey` (tenant/domain segment) | Directory entries (users, groups, computers, OUs, GPOs, ...) |
 | `Schema` | `/partitionKey` | Schema attribute and class definitions |
 | `Audit` | `/partitionKey` (date-bucket) | Audit log records |
 | `Configuration` | `/partitionKey` | Domain config, site/subnet topology, replication metadata |
@@ -207,7 +232,7 @@ Directory.NET layers AD-semantics (USN ordering, conflict resolution by timestam
 ## Web Management Portal Architecture
 
 ```
-Browser (Vue 3 + PrimeVue)
+Browser (Vue 3 + PrimeVue 4.x)
     │  HTTP/JSON  /api/v1/...
     ▼
 Directory.Web  (ASP.NET Core Minimal API)
@@ -245,3 +270,34 @@ The Vue 3 SPA is served as static files from `wwwroot/` in production. In develo
 - LDAP binds are audited via `LdapAuditService` (in-memory ring buffer, queryable via `/api/v1/ldap-audit`).
 - Cosmos DB access uses a single connection string; row-level security is implemented in the
   store layer via partition key scoping per tenant/domain.
+
+---
+
+## Build & Deployment
+
+The project targets **.NET 10** (`net10.0`) via a shared `Directory.Build.props` at the repository
+root. All projects inherit the target framework, language version (`preview`), and common build
+settings from this file.
+
+### Docker Images
+
+Two multi-stage Dockerfiles are provided:
+
+| Dockerfile | Base Image (build) | Base Image (runtime) | Ports |
+|---|---|---|---|
+| `Dockerfile.web` | `mcr.microsoft.com/dotnet/sdk:10.0` | `mcr.microsoft.com/dotnet/aspnet:10.0` | 6001 |
+| `Dockerfile.server` | `mcr.microsoft.com/dotnet/sdk:10.0` | `mcr.microsoft.com/dotnet/runtime:10.0` | 389, 636, 88, 464, 53, 3268, 3269, 1135, 49664, 9389 |
+
+The web Dockerfile installs Node.js 20 in the build stage for the Vue SPA compilation. The server
+Dockerfile includes a health check via `dotnet Directory.Server.dll --health-check`.
+
+### CI/CD
+
+GitHub Actions workflows:
+
+- **`build.yml`**: Triggered on push to `main`/`develop` and PRs to `main`. Runs a matrix build
+  (Ubuntu + Windows), executes the .NET test suite, type-checks the Vue frontend with `vue-tsc`,
+  and uploads coverage reports.
+- **`release.yml`**: Triggered on version tags (`v*`). Publishes self-contained binaries for
+  Windows x64 and Linux x64, creates a GitHub Release with `.tar.gz` and `.zip` archives, then
+  builds and pushes Docker images to GitHub Container Registry (GHCR).
